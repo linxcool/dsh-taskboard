@@ -1,4 +1,4 @@
-﻿import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { TaskStore } from '../src/host/store.ts'
 import { normalizeExternalConfig } from '../src/host/external-sync.ts'
 import type { ExternalConfig } from '../src/shared/external.ts'
 import type { TaskRecord, TaskStatus } from '../src/shared/protocol.ts'
+import { waitFor } from './wait-for.ts'
 
 const directories: string[] = []
 afterEach(async () => { await Promise.all(directories.splice(0).map(dir => rm(dir, { recursive: true, force: true }))) })
@@ -177,6 +178,43 @@ describe('GitHub Project write-back', () => {
     })
     dispose()
     expect(moves).toEqual([['t1', 'in_progress', 'in_review'], ['t1', 'in_review', 'done']])
+  })
+
+  it('observes a committed move and performs the write-back end-to-end', async () => {
+    const store = await storeWith(task())
+    const queries: string[] = []
+    const comments: string[] = []
+    const request = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith('/comments')) {
+        comments.push(String((JSON.parse(String(init?.body)) as { body: string }).body))
+        return new Response('{}', { status: 201 })
+      }
+      const payload = JSON.parse(String(init?.body)) as { query: string }
+      queries.push(payload.query)
+      if (payload.query.includes('TaskboardIssueStatus')) {
+        return json({ data: { repository: { issue: { projectItems: { nodes: [{
+          id: 'PVTI_1', project: { id: 'PVT_1', number: 5, owner: { login: 'acme' } },
+          fieldValues: { nodes: [{ name: '执行中', field: { name: 'Status' } }] },
+        }] } } } } })
+      }
+      if (payload.query.includes('TaskboardStatusField')) {
+        return json({ data: { node: { field: { id: 'F1', options: [{ id: 'o1', name: '待你验收' }] } } } })
+      }
+      return json({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'PVTI_1' } } } })
+    }) as typeof fetch
+    const service = new GithubWritebackService({ store, connection: () => config(), request })
+    const dispose = store.onTaskMoved((moved, from, to) => service.afterMove(moved, from, to))
+    await store.mutate('task-moved', ledger => {
+      const next = structuredClone(ledger.tasks[0]!)
+      next.status = 'in_review'
+      next.version += 1
+      ledger.tasks[0] = next
+      return [next]
+    })
+    await waitFor(() => comments.length === 1)
+    dispose()
+    expect(queries.some(query => query.includes('TaskboardSetStatus'))).toBe(true)
+    expect(comments[0]).toContain('in_progress → in_review')
   })
 
   it('validates write-back settings through the shared registry', () => {
