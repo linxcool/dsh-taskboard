@@ -33,6 +33,7 @@ export function filterTasks(state: ControllerState, tasks: TaskRecord[]): TaskRe
   const filtered = tasks.filter(t =>
     (state.filters.workspaceId === undefined || t.workspaceId === state.filters.workspaceId)
     && (state.filters.urgencies.length === 0 || state.filters.urgencies.includes(t.urgency))
+    && (state.filters.externalOnly !== true || t.external !== undefined)
     && (q.length === 0 || t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)))
   if (state.sortBy === 'default') return filtered
   const sorted = [...filtered]
@@ -301,6 +302,17 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             {t(URGENCY_KEYS[u])}
           </button>
         ))}
+        <button
+          type="button"
+          className="dsh-atb-chip"
+          data-kind="external-filter"
+          data-on={state.filters.externalOnly === true}
+          aria-pressed={state.filters.externalOnly === true}
+          title={t('board.filter.externalTitle')}
+          onClick={() => controller.toggleExternalOnly()}
+        >
+          🐙 {t('board.filter.external')}
+        </button>
         <button
           type="button"
           className="dsh-atb-chip"

@@ -737,6 +737,8 @@ export const ru: TaskboardDict = {
   'detail.needsHuman.unmark': '✓ Снять «нужен человек»',
   'detail.needsHuman.hint': 'Переключить, ждёт ли задача ввода, авторизации, учётных данных или решения человека',
   'board.filter.needsHuman': 'Ждут меня',
+  'board.filter.external': 'GitHub Issue',
+  'board.filter.externalTitle': 'Показывать только карточки из внешнего трекера (GitHub Issue).',
   'board.filter.needsHumanTitle': 'Показать только задачи, ждущие вмешательства или ввода человека',
   'human.title': 'Действие человека',
   'human.suspected': 'Возможно, ждёт действия человека: {reason}',

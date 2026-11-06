@@ -21,6 +21,8 @@ export interface BoardFilters {
   workspaceId?: string
   /** Selected urgency chips (empty = all). */
   urgencies: Urgency[]
+  /** Only cards imported from an external tracker (GitHub Issue etc.). */
+  externalOnly?: boolean
 }
 
 /** Column sort orders. */
@@ -30,15 +32,16 @@ export type SortBy = 'default' | 'updated' | 'urgency' | 'created' | 'title'
 const VIEW_KEY = 'dsh-taskboard-view-v1'
 
 /** Load the persisted view state (never throws; fresh on any parse error). */
-function loadView(): { workspaceId?: string; urgencies: Urgency[]; sortBy: SortBy; doneCollapsed: boolean; backlogCollapsed: boolean; todoCollapsed: boolean; collapsedWorkspaceGroups?: string[] } {
+function loadView(): { workspaceId?: string; urgencies: Urgency[]; externalOnly?: boolean; sortBy: SortBy; doneCollapsed: boolean; backlogCollapsed: boolean; todoCollapsed: boolean; collapsedWorkspaceGroups?: string[] } {
   try {
     const raw = localStorage.getItem(VIEW_KEY)
     if (raw === null) return { urgencies: [], sortBy: 'default', doneCollapsed: false, backlogCollapsed: false, todoCollapsed: false }
-    const parsed = JSON.parse(raw) as { workspaceId?: string; urgencies?: Urgency[]; sortBy?: SortBy; doneCollapsed?: boolean; backlogCollapsed?: boolean; todoCollapsed?: boolean; collapsedWorkspaceGroups?: unknown }
+    const parsed = JSON.parse(raw) as { workspaceId?: string; urgencies?: Urgency[]; externalOnly?: boolean; sortBy?: SortBy; doneCollapsed?: boolean; backlogCollapsed?: boolean; todoCollapsed?: boolean; collapsedWorkspaceGroups?: unknown }
     const sortBy = parsed.sortBy === 'updated' || parsed.sortBy === 'urgency' || parsed.sortBy === 'created' || parsed.sortBy === 'title' ? parsed.sortBy : 'default'
     return {
       workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : undefined,
       urgencies: Array.isArray(parsed.urgencies) ? parsed.urgencies.filter(u => u === 'urgent' || u === 'normal' || u === 'relaxed') : [],
+      externalOnly: parsed.externalOnly === true,
       sortBy,
       doneCollapsed: parsed.doneCollapsed === true,
       backlogCollapsed: parsed.backlogCollapsed === true,
@@ -112,7 +115,7 @@ function initialState(): ControllerState {
   return {
     ledger: emptyLedger(),
     workspaces: [],
-    filters: { workspaceId: view.workspaceId, urgencies: view.urgencies },
+    filters: { workspaceId: view.workspaceId, urgencies: view.urgencies, externalOnly: view.externalOnly === true },
     search: '',
     sortBy: view.sortBy,
     doneCollapsed: view.doneCollapsed,
@@ -287,6 +290,12 @@ export class BoardController {
     this.persistView()
   }
 
+  /** Toggle the external-tracker-only filter (persisted). */
+  toggleExternalOnly(): void {
+    this.setState({ filters: { ...this.state.filters, externalOnly: !this.state.filters.externalOnly } })
+    this.persistView()
+  }
+
   /** Set the free-text search (transient — not persisted). */
   setSearch(search: string): void {
     this.setState({ search })
@@ -337,6 +346,7 @@ export class BoardController {
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         workspaceId: this.state.filters.workspaceId,
         urgencies: this.state.filters.urgencies,
+        externalOnly: this.state.filters.externalOnly === true,
         sortBy: this.state.sortBy,
         doneCollapsed: this.state.doneCollapsed,
         backlogCollapsed: this.state.backlogCollapsed,

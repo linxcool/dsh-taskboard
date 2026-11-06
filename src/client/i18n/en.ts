@@ -734,6 +734,8 @@ export const en: TaskboardDict = {
   'detail.needsHuman.unmark': '✓ Clear Needs Human',
   'detail.needsHuman.hint': 'Toggle whether this task is blocked waiting for human input, auth, credentials or decision',
   'board.filter.needsHuman': 'Waiting for Me',
+  'board.filter.external': 'GitHub Issues',
+  'board.filter.externalTitle': 'Only show cards imported from an external tracker (GitHub Issue).',
   'board.filter.needsHumanTitle': 'Show only tasks waiting for human intervention or input',
   "human.title": "Human action",
   "human.suspected": "Possibly waiting for human action: {reason}",

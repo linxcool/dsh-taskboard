@@ -736,6 +736,8 @@ export const zh = {
   'detail.needsHuman.unmark': '✓ 解除需人介入',
   'detail.needsHuman.hint': '标记该任务是否正在卡在等待人类输入、扫码、提供凭据或决策',
   'board.filter.needsHuman': '待我处理',
+  'board.filter.external': 'GitHub Issue',
+  'board.filter.externalTitle': '只看从 GitHub Issue 等外部任务源导入的卡片',
   'board.filter.needsHumanTitle': '仅展示需要人类操作或提供信息的任务',
   "human.title": "人工等待",
   "human.suspected": "疑似等待人工：{reason}",
