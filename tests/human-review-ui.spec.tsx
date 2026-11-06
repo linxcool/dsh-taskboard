@@ -36,7 +36,7 @@ async function mount(tasks: TaskRecord[], view: 'board' | 'detail' | 'card') {
   root.render(view === 'board' ? <TaskBoard controller={controller} /> : view === 'detail'
     ? <TaskDetail task={tasks[0]!} controller={controller} /> : <TaskCard task={tasks[0]!} controller={controller} />)
   await waitFor(() => host.querySelector(view === 'board' ? '.dsh-atb-columns' : view === 'detail' ? '.dsh-atb-fieldcard' : '.dsh-atb-card') !== null)
-  return { host, updates }
+  return { host, updates, controller }
 }
 
 describe('human waiting and delivery review UI', () => {
@@ -83,8 +83,29 @@ describe('human waiting and delivery review UI', () => {
     expect(history.textContent).toContain('Tests failed')
   })
 
-  it('shows clipboard failure and allows selecting the path', async () => {
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+  it('P4: disables completion while review cards are open and dispatches a read-only review card', async () => {
+    const source = task({ id: 't-src', title: '实现登录', status: 'in_review' })
+    const review = task({ id: 't-rev', title: '评审登录', status: 'todo', reviewOf: 't-src' })
+    const { host, controller } = await mount([source, review], 'detail')
+    const done = host.querySelector<HTMLButtonElement>('.dsh-atb-movebtn[data-to="done"]')
+    expect(done).not.toBeNull()
+    expect(done!.disabled).toBe(true)
+    expect(host.textContent).toContain('1 张评审卡未完成')
+    const action = [...host.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('发起评审'))!
+    expect(action).toBeTruthy()
+    action.click()
+    await waitFor(() => controller.getSnapshot().composerOpen)
+    expect(controller.getSnapshot().templatePrefill).toMatchObject({ reviewOf: 't-src', permission: 'read-only' })
+  })
+
+  it('P4: a review card shows its source task', async () => {
+    const source = task({ id: 't-src', title: '实现登录', status: 'in_review' })
+    const review = task({ id: 't-rev', title: '评审登录', status: 'todo', reviewOf: 't-src' })
+    const { host } = await mount([review, source], 'detail')
+    expect(host.textContent).toContain('评审：实现登录')
+  })
+
+  it('shows clipboard failure and allows selecting the path', async () => {    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
     const { host } = await mount([task({ status: 'done', executions: [{ id: 'e-new', trigger: 'manual', startedAt: 1, endedAt: 2, outcome: 'succeeded',
       report: { summary: 'Report', changedFiles: ['src/a.ts'], checks: ['Browser check not run'], artifacts: [], risk: '' } }] })], 'detail')
     host.querySelector<HTMLButtonElement>('.dsh-atb-file-copybtn')!.click()

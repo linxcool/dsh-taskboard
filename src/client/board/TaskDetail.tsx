@@ -849,6 +849,23 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
           >
             {t('detail.action.saveTpl')}
           </button>
+          {task.trashedAt === undefined && (task.status === 'in_progress' || task.status === 'in_review') && (
+            <button
+              type="button"
+              className="dsh-atb-detail-edit"
+              title={t('detail.review.actionTitle')}
+              onClick={() => controller.newFromTemplate({
+                title: t('detail.review.title', { title: task.title }).slice(0, 200),
+                description: t('detail.review.description', { title: task.title }),
+                prompt: t('detail.review.prompt', { title: task.title }),
+                urgency: task.urgency,
+                permission: 'read-only',
+                reviewOf: task.id,
+              })}
+            >
+              {t('detail.review.action')}
+            </button>
+          )}
           {canRun && task.branch !== undefined && (
             <button
               type="button"
@@ -950,6 +967,20 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
         <div className="dsh-atb-movebtns">
           {moveTargets(task).map(to => {
             if (to === 'done') {
+              if (openReviews.length > 0) {
+                return (
+                  <button
+                    key={to}
+                    type="button"
+                    className="dsh-atb-movebtn"
+                    data-to={to}
+                    disabled
+                    title={t('detail.review.blocked', { n: openReviews.length })}
+                  >
+                    {t('detail.move.to', { status: t(MOVE_KEYS[to]) })}
+                  </button>
+                )
+              }
               return confirmDone
                 ? (
                     <span key={to} className="dsh-atb-confirm">
