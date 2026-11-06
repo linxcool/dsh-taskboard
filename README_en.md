@@ -9,6 +9,8 @@ English | [简体中文](./README.md)
 
 A **task board plugin for DeepSeek Harness**: humans create cards, agents claim and execute them, humans review and accept. Tasks live on projects (= workspaces), support per-task model & preset selection, and can run manually or on a cron schedule — full two-way collaboration from card to sign-off.
 
+> **This is a downstream development branch**: it adds read-only GitHub Issue import, GitHub Project Status write-back, employee cards (agent presets) and a review-card completion gate. See [FORK.md](./FORK.md) for configuration, acceptance and rollback.
+
 - **Closed loop**: human creates a card → agent claims & executes → structured hand-off report → human accepts (✓ done / ✗ send back with a reason)
 - **10 `taskboard_*` agent tools** plus code-level protocol gates: agents can never move a task to *done*, held tasks cannot be snatched away, cross-project claims are rejected
 - **Execution**: manual, one-shot scheduled, or host-side periodic cron runs (keep running when the browser closes); scheduled tasks can reuse an existing session in the selected project; periodic tasks can return to todo each round or keep a review record while creating the next todo card
