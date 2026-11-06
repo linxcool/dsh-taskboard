@@ -2,6 +2,7 @@ import type { ExternalConfig } from '../shared/external.ts'
 import { ExternalProviderRegistry } from './external-provider.ts'
 import { ZentaoProvider } from './zentao.ts'
 import { TapdProvider } from './tapd.ts'
+import { GithubProvider } from './github.ts'
 
 const validateNumericProjects = (config: ExternalConfig) => {
   if (config.mappings.some(m => !/^\d+$/.test(m.projectId))) throw new Error('provider requires numeric project IDs')
@@ -42,5 +43,24 @@ export function createBuiltinProviders(): ExternalProviderRegistry {
       if (config.authMode === 'basic' && config.credentials.apiUser?.includes(':')) throw new Error('API username cannot contain a colon')
     },
     create: config => new TapdProvider(config),
+  }).register({
+    descriptor: { id: 'github', name: 'GitHub', scopeLabel: 'ext.projectId', defaultBaseUrl: 'https://api.github.com',
+      authModes: [
+        { id: 'token', label: 'ext.token', fields: [{ key: 'token', label: 'ext.token', secret: true }] },
+      ],
+      settingsFields: [
+        { key: 'urgentLabels', label: 'ext.urgentPriorities', defaultValue: 'urgent,high,紧急,高' },
+        { key: 'relaxedLabels', label: 'ext.relaxedPriorities', defaultValue: 'low,nice to have,低' },
+        { key: 'requestIntervalMs', label: 'ext.requestInterval', defaultValue: '100' },
+      ],
+      capabilities: { itemTypes: ['issue'], projectDiscovery: true, accountDiscovery: true, pagination: 'page', incremental: false } },
+    validate: config => {
+      const base = (config.baseUrl || 'https://api.github.com').trim()
+      if (!/^https?:\/\//.test(base)) throw new Error('GitHub API base URL must use http or https')
+      if (config.mappings.some(m => !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(m.projectId))) throw new Error('GitHub project IDs must be owner/repo')
+      const interval = Number(config.settings.requestIntervalMs ?? 100)
+      if (!Number.isInteger(interval) || interval < 0 || interval > 10_000) throw new Error('request interval must be 0–10000 milliseconds')
+    },
+    create: config => new GithubProvider(config),
   })
 }

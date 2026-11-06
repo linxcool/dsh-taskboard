@@ -99,7 +99,7 @@ describe('provider-driven external UI', () => {
     }))
     const host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => { root!.render(createElement(ExternalSyncPanel)) })
-    await waitFor(() => host.querySelectorAll('select')[0]?.querySelectorAll('option').length === 2)
+    await waitFor(() => host.querySelectorAll('select')[0]?.querySelectorAll('option').length === providers.length)
     const selects = () => [...host.querySelectorAll<HTMLSelectElement>('select')]
     await choose(selects()[0]!, 'tapd')
     expect(selects()[1]!.value).toBe('basic')
