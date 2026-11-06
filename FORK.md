@@ -66,7 +66,7 @@
 | P2 | 失败（无权限/字段不存在） | 移卡仍成功；卡上出现「GitHub 回写失败」host 评论 |
 | P3 | 打开「员工」 | 列出预设；选 Reviewer 预设建卡默认只读 |
 | P4 | 源卡发起评审 → 尝试完成源卡 | 完成禁用/被拒；评审卡完成后放行 |
-| 回归 | 原有看板功能 | 未配置 GitHub 时行为与本地上游一致；733+ 测试通过 |
+| 回归 | 原有看板功能 | 未配置 GitHub 时行为与本地上游一致；738 测试通过 |
 
 本地验证命令（无需 DSH 重启）：
 
@@ -77,11 +77,14 @@ node node_modules/vitest/vitest.mjs run
 node node_modules/tsdown/dist/run.mjs -c tsdown.config.ts
 ```
 
-### 联调状态（2026-11-06）
+### 联调状态（2026-11-06，已重启 DSH 后）
 
-- **只读联调已通过**：P1 provider 对 `linxcool/hdefense` 实际拉取 52 条 open issue（PR 已过滤）；Project #1 的 Status 选项与默认映射完全一致；P2 lookup 查询命中 `hdefense#1`（Project 1 / owner `linxcool`）。
+- **P1 只读联调已通过**：provider 对 `linxcool/hdefense` 实际拉取 52 条 open issue（PR 已过滤）；运行的插件路由 `POST /dsh-taskboard/external/test` 返回 200，`/external/projects` 返回 64 个仓库；Project #1 的 Status 选项与默认映射完全一致。
+- **P2 真实写入已通过**：对 `hdefense#49` 执行 `in_progress → in_review`，Project Status 由「待澄清」变为「待你验收」，Issue 新增 1 条评论；重复执行不重复写入；测试后已还原为「待澄清」。评论链接：<https://github.com/linxcool/hdefense/issues/49#issuecomment-6678064037>。
+- **P4 路由级实测已通过**：在真实看板创建实现卡 + 关联评审卡，评审未完成时 done 返回 400 `review cards still open`；完成评审卡后 done 返回 200；测试卡已 purge，看板恢复 0 任务。
+- **UI**：重启后侧栏确认出现「任务看板」；员工目录与「发起评审」按钮由组件测试覆盖，等待用户目视确认。
 - **主机级集成测试**：`tests/github-workflow.spec.ts` 覆盖「外部同步导入 → 看板移卡 → Project Status + Issue 评论」，网络全部 mock。
-- **待授权**：真实写入 GitHub 的端到端验证（需要用户指定可安全改动的 Issue）。
+- **未做**：GUI 内保存 GitHub 连接（需要用户自己的 PAT）；P3/P4 按钮的目视点击确认。
 
 ---
 
