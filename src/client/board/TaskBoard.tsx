@@ -21,6 +21,7 @@ import { TaskFormModal } from './TaskFormModal.tsx'
 import { SettingsModal } from './SettingsModal.tsx'
 import { ImportModal } from './ImportModal.tsx'
 import { TemplateManager } from './TemplateManager.tsx'
+import { EmployeesModal } from './EmployeesModal.tsx'
 import { useAlert } from './AlertModal.tsx'
 
 /** Urgency sort rank (urgent first). */
@@ -318,6 +319,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
         <button type="button" className="dsh-atb-btn" onClick={() => controller.toggleSecondary()}>
           {state.secondaryOpen ? t('board.action.backToBoard') : t('board.action.otherTasks')}
         </button>
+        <button type="button" className="dsh-atb-btn" title={t('board.action.employeesTitle')} onClick={() => controller.openEmployees()}>{t('board.action.employees')}</button>
         <button type="button" className="dsh-atb-btn" title={t('board.action.settingsTitle')} onClick={() => controller.openSettings()}>{t('board.action.settings')}</button>
         <button type="button" className="dsh-atb-btn" title={t('board.action.diagTitle')} onClick={() => controller.openDiagnostics()}>{t('board.action.diag')}</button>
         <button type="button" className="dsh-atb-btn" title={t('board.action.importTitle')} onClick={() => controller.openImport()}>{t('board.action.import')}</button>
@@ -617,6 +619,8 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
       {state.importOpen && <ImportModal controller={controller} />}
 
       {state.tplManagerOpen && <TemplateManager controller={controller} />}
+
+      {state.employeesOpen && <EmployeesModal controller={controller} />}
 
       {alertEl}
     </div>

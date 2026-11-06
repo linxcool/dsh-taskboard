@@ -625,6 +625,22 @@ span.dsh-atb-comment-delivered { cursor: default; }
 }
 .dsh-atb-modal-close:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.18)); color: var(--dsw-alias-label-primary, inherit); }
 
+.dsh-atb-employees { width: min(760px, calc(100vw - 48px)); }
+.dsh-atb-employees-body { display: block; }
+.dsh-atb-employees-note { margin: 4px 0; font-size: 12.5px; color: var(--dsw-alias-label-secondary, gray); }
+.dsh-atb-employees-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.dsh-atb-employee {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); border-radius: 10px;
+}
+.dsh-atb-employee-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dsh-atb-employee-id { font-size: 11px; color: var(--dsw-alias-label-tertiary, gray); overflow-wrap: anywhere; }
+.dsh-atb-employee-role { margin: 0; font-size: 12px; color: var(--dsw-alias-label-secondary, gray); }
+.dsh-atb-employee-badge {
+  flex: none; font-size: 10px; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); color: var(--dsw-alias-label-secondary, gray);
+}
+
 .dsh-atb-modal-body {
   padding: 13px 16px; overflow-y: auto;
   display: grid; grid-template-columns: 1fr 1fr; gap: 11px 10px;

@@ -94,6 +94,8 @@ export interface ControllerState {
   importOpen: boolean
   /** Board-settings modal visible (0.5.0). */
   settingsOpen: boolean
+  /** Employee (agent preset) catalog modal visible (P3). */
+  employeesOpen: boolean
   /** Current durable-data directory, loaded when settings opens. */
   storage?: StorageStatus
   /** Settled migration outcome (0.7.0): success path plus non-fatal warnings. */
@@ -125,6 +127,7 @@ function initialState(): ControllerState {
     tplManagerOpen: false,
     importOpen: false,
     settingsOpen: false,
+    employeesOpen: false,
   }
 }
 
@@ -754,6 +757,12 @@ export class BoardController {
 
   /** Close the board-settings modal. */
   closeSettings(): void { this.setState({ settingsOpen: false, storageNotice: undefined }) }
+
+  /** Open the employee (agent preset) catalog (P3). */
+  openEmployees(): void { this.setState({ employeesOpen: true }) }
+
+  /** Close the employee catalog. */
+  closeEmployees(): void { this.setState({ employeesOpen: false }) }
 
   /**
    * Replace board settings (0.5.0). The host broadcasts a settings-updated
