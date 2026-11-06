@@ -36,6 +36,7 @@ import {
   normalizeModel,
   normalizePrompt,
   normalizeTitle,
+  pendingReviewers,
   sanitizeCustomBranchName,
   summarize,
   syncClaim,
@@ -780,6 +781,18 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
             const texts = (body.checklist as string[]).map(c => c.trim()).filter(c => c.length > 0)
             if (texts.length > 0) checklist = checklistFromTexts(texts)
           }
+          // P4: optional review link — the card reviews another in-flight task.
+          // The reviewed task cannot move to done until this card is closed.
+          const reviewOfRaw = str(body, 'reviewOf')
+          let reviewOf: string | undefined
+          if (reviewOfRaw !== null && reviewOfRaw.length > 0) {
+            const target = store.snapshot().tasks.find(t => t.id === reviewOfRaw && t.trashedAt === undefined)
+            if (target === undefined) throw new Error('Error: not_found: review target not found')
+            if (target.status !== 'in_progress' && target.status !== 'in_review') {
+              throw new Error('Error: invalid_input: review target must be in_progress or in_review')
+            }
+            reviewOf = target.id
+          }
           const now = options.now()
           const task: TaskRecord = {
             id: newTaskId(),
@@ -797,6 +810,7 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
             ...(presetId !== undefined ? { presetId } : {}),
             permission,
             ...(checklist !== undefined ? { checklist } : {}),
+            ...(reviewOf !== undefined ? { reviewOf } : {}),
             version: 1,
             createdAt: now,
             updatedAt: now,
@@ -931,6 +945,12 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
               const { index, task } = liveTaskAt(ledger, id)
               if (ifVersion !== task.version) throw new Error(`Error: version_conflict: stale version ${ifVersion} (current ${task.version})`)
               if (!canTransition(task.status, to)) throw new Error(`Error: invalid_transition: illegal transition ${task.status} → ${to}`)
+              if (to === 'done') {
+                const openReviews = pendingReviewers(ledger.tasks, id)
+                if (openReviews.length > 0) {
+                  throw new Error(`Error: invalid_transition: review cards still open (${openReviews.map(review => review.id).join(', ')})`)
+                }
+              }
               beforeTask = task
               next = structuredClone(task)
               next.status = to

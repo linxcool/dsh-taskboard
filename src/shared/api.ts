@@ -91,6 +91,8 @@ export type CreateTaskBody = {
   permission?: string
   /** Acceptance checklist item texts (host mints ids, all unchecked). */
   checklist?: string[]
+  /** Id of the task this card reviews (P4 review gate). */
+  reviewOf?: string
 }
 
 /** Update-task request body (ifVersion mandatory). */
@@ -217,6 +219,8 @@ export type TaskTemplateSpec = {
   permission?: string
   /** Checklist item texts (host mints ids at create time). */
   checklist?: string[]
+  /** Review target carried by a review-card template (P4). */
+  reviewOf?: string
 }
 
 /** One reusable task template (0.4.0). */

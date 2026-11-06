@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ExternalSourcePanel } from './ExternalSourcePanel.tsx'
 import type { BoardController } from '../controller.ts'
 import type { CommentRecord, ExecutionRecord, TaskRecord } from '../../shared/protocol.ts'
-import { canTransition, checklistProgress, taskAssociatedSessionIds, taskSessionId } from '../../shared/protocol.ts'
+import { canTransition, checklistProgress, pendingReviewers, taskAssociatedSessionIds, taskSessionId } from '../../shared/protocol.ts'
 import { useAlert } from './AlertModal.tsx'
 import { checkNeedsHuman, fmtTime, isStaleClaim } from './format.ts'
 import { MOVE_KEYS, OUTCOME_KEYS, STATUS_KEYS, URGENCY_KEYS } from './labels.ts'
@@ -673,6 +673,8 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
   const associatedSessions = taskAssociatedSessionIds(task)
   const archiveState = controller.getSnapshot()
   const archiveResult = archiveState.sessionArchive?.taskId === task.id ? archiveState.sessionArchive.result : undefined
+  const reviewTarget = task.reviewOf === undefined ? undefined : archiveState.ledger.tasks.find(candidate => candidate.id === task.reviewOf)
+  const openReviews = pendingReviewers(archiveState.ledger.tasks, task.id)
   const isReviewOrDone = task.status === 'in_review' || task.status === 'done'
   const hasReport = task.executions.some(e => e.report !== undefined)
   // Issue #51 Plan A: pending = user comments not yet delivered to the
@@ -759,6 +761,12 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
               </Chip>
             )}
             {task.presetId !== undefined && <Chip icon="🎛" >{task.presetId}</Chip>}
+            {task.reviewOf !== undefined && (
+              <Chip icon="🧪" title={t('form.reviewOf.title')}>{t('detail.reviewOf', { title: reviewTarget?.title ?? task.reviewOf })}</Chip>
+            )}
+            {openReviews.length > 0 && (
+              <Chip icon="🧪" tone="urgent">{t('detail.reviewOpen', { n: openReviews.length })}</Chip>
+            )}
             {task.execution.mode === 'scheduled'
               && (task.execution.nextRunAt ?? task.execution.runAt) !== undefined && (
               <Chip icon="⏰">{t('detail.chip.nextRun', { cron: task.execution.cron ?? '', time: fmtTime(task.execution.nextRunAt ?? task.execution.runAt) })}</Chip>

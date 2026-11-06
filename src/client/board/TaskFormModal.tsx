@@ -237,6 +237,15 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
   const [presetId, setPresetId] = useState(initialPreset)
   const [presets, setPresets] = useState<Array<{ id: string; name?: string }>>([])
   const [presetDefault, setPresetDefault] = useState<string | undefined>(undefined)
+  // P4 review link: a review card picks one in-flight task to review.
+  const [reviewOf, setReviewOf] = useState(editing ? '' : prefill?.reviewOf ?? '')
+  const editingTaskId = task?.id
+  const reviewCandidates: TaskRecord[] = editing
+    ? []
+    : state.ledger.tasks.filter(candidate => candidate.trashedAt === undefined
+      && candidate.status !== 'done' && candidate.status !== 'canceled' && candidate.status !== 'archived'
+      && candidate.status !== 'backlog' && candidate.status !== 'todo'
+      && candidate.id !== editingTaskId)
   // Permission preset (0.5.5): 'workspace-write' (default) | 'read-only' | 'danger-full-access'
   const [permission, setPermission] = useState<PermissionMode>(
     task?.permission ?? (prefill?.permission ? asPermission(prefill.permission) : defaultPermissionOf(state.ledger.settings)),
@@ -442,6 +451,7 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
         presetId: presetOut ?? null,
         permission,
         ...(rows.length > 0 ? { checklist: rows.map(r => r.text) } : {}),
+        ...(reviewOf !== '' ? { reviewOf } : {}),
       })
     void action.catch(() => undefined).finally(() => setBusy(false))
   }
@@ -487,6 +497,7 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
           presetId: presetOut ?? null,
           permission,
           ...(rows.length > 0 ? { checklist: rows.map(r => r.text) } : {}),
+          ...(reviewOf !== '' ? { reviewOf } : {}),
         })
         if (id !== undefined) await controller.run(id)
       }
@@ -635,6 +646,20 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
                     {presets.map(p => (
                       <option key={p.id} value={p.id}>
                         {p.name ?? p.id}{p.id === presetDefault ? t('form.preset.defaultTag') : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+
+              {reviewCandidates.length > 0 && (
+                <Field label={t('form.reviewOf.label')}>
+                  <select value={reviewOf} onChange={e => setReviewOf(e.target.value)} title={t('form.reviewOf.title')}>
+                    <option value="">{t('form.reviewOf.none')}</option>
+                    {reviewOf !== '' && !reviewCandidates.some(candidate => candidate.id === reviewOf) && <option value={reviewOf}>{reviewOf}</option>}
+                    {reviewCandidates.map(candidate => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.title}
                       </option>
                     ))}
                   </select>

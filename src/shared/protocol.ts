@@ -84,6 +84,16 @@ export function canCompleteFrom(from: TaskStatus): boolean {
   return from === 'in_review'
 }
 
+/**
+ * Review cards (P4) linked to `taskId` that still block its completion:
+ * a review card must be done/canceled/archived before the reviewed task can
+ * move to done.
+ */
+export function pendingReviewers(tasks: readonly TaskRecord[], taskId: string): TaskRecord[] {
+  return tasks.filter(task => task.reviewOf === taskId && task.trashedAt === undefined
+    && task.status !== 'done' && task.status !== 'canceled' && task.status !== 'archived')
+}
+
 // ---------------------------------------------------------------------------
 // Urgency
 // ---------------------------------------------------------------------------
@@ -927,6 +937,11 @@ export type TaskRecord = {
    * going. Absent on originally created tasks.
    */
   spawnedFrom?: string
+  /**
+   * Id of the task this card reviews (P4). While this card is open
+   * (not done/canceled/archived) the reviewed task cannot move to done.
+   */
+  reviewOf?: string
   /** Soft-delete marker set by agent `taskboard_delete`; user confirms the purge. */
   trashedAt?: number
 }
@@ -1728,6 +1743,7 @@ export function validateImportedTask(raw: unknown, now: number): { ok: true; tas
       comments,
       executions,
       ...(typeof e.executionsPruned === 'number' ? { executionsPruned: e.executionsPruned } : {}),
+      ...(typeof e.reviewOf === 'string' && isValidTaskId(e.reviewOf) ? { reviewOf: e.reviewOf } : {}),
       ...(typeof e.trashedAt === 'number' ? { trashedAt: e.trashedAt } : {}),
     }
     applyHumanWaitingPatch(task, e)
@@ -1756,6 +1772,7 @@ export function isPlausibleTaskRecord(raw: unknown): boolean {
     && Array.isArray(t.comments) && Array.isArray(t.executions)
     && typeof t.execution === 'object' && t.execution !== null
     && (t.execution as { mode?: unknown }).mode !== undefined
+    && (t.reviewOf === undefined || (typeof t.reviewOf === 'string' && isValidTaskId(t.reviewOf)))
 }
 
 /**

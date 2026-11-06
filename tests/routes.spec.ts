@@ -458,6 +458,42 @@ describe('taskboard routes', () => {
     expect(stale.json.error.code).toBe('version_conflict')
   })
 
+  it('P4 review gate: an open review card blocks done until the review completes', async () => {
+    const created = await post('/dsh-taskboard/tasks', { title: 'Implementation', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+    await post(`/dsh-taskboard/tasks/${id}/move`, { ifVersion: 1, status: 'in_progress' })
+    await post(`/dsh-taskboard/tasks/${id}/move`, { ifVersion: 2, status: 'in_review' })
+
+    const review = await post('/dsh-taskboard/tasks', { title: 'Review', workspaceId: 'ws-a', urgency: 'normal', reviewOf: id })
+    expect(review.status).toBe(201)
+    const reviewId = review.json.value.id as string
+    expect(store.get(reviewId)!.reviewOf).toBe(id)
+
+    const blocked = await post(`/dsh-taskboard/tasks/${id}/move`, { ifVersion: 3, status: 'done' })
+    expect(blocked.status).toBe(400)
+    expect(blocked.json.ok).toBe(false)
+    expect(blocked.json.error.message).toContain('review cards still open')
+    expect(store.get(id)!.status).toBe('in_review')
+
+    await post(`/dsh-taskboard/tasks/${reviewId}/move`, { ifVersion: 1, status: 'in_progress' })
+    await post(`/dsh-taskboard/tasks/${reviewId}/move`, { ifVersion: 2, status: 'in_review' })
+    await post(`/dsh-taskboard/tasks/${reviewId}/move`, { ifVersion: 3, status: 'done' })
+
+    const done = await post(`/dsh-taskboard/tasks/${id}/move`, { ifVersion: 3, status: 'done' })
+    expect(done.status).toBe(200)
+    expect(done.json.value.status).toBe('done')
+  })
+
+  it('P4 review link: validates the target exists and is in flight', async () => {
+    const created = await post('/dsh-taskboard/tasks', { title: 'Target', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+    const missing = await post('/dsh-taskboard/tasks', { title: 'Review', workspaceId: 'ws-a', urgency: 'normal', reviewOf: 't-missing' })
+    expect(missing.status).toBe(404)
+    const notInFlight = await post('/dsh-taskboard/tasks', { title: 'Review', workspaceId: 'ws-a', urgency: 'normal', reviewOf: id })
+    expect(notInFlight.status).toBe(400)
+    expect(notInFlight.json.error.message).toContain('in_progress or in_review')
+  })
+
   it('quick-reject: in_review → todo with optional note, atomically', async () => {
     const created = await post('/dsh-taskboard/tasks', { title: 'QuickReject', workspaceId: 'ws-a', urgency: 'normal' })
     const id = created.json.value.id as string
