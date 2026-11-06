@@ -31,6 +31,7 @@ import { dshHomePath } from './host/sdk.ts'
 import { TaskStore } from './host/store.ts'
 import { ExternalSyncService } from './host/external-sync.ts'
 import { createBuiltinProviders } from './host/external-providers.ts'
+import { GithubWritebackService } from './host/github-writeback.ts'
 import { TemplateStore } from './host/templates.ts'
 import { ExternalSessionSyncService } from './host/session-sync.ts'
 import { ERR, ToolError, registerTaskboardTools, workspaceFace, type WorkspaceFace } from './host/tools.ts'
@@ -297,6 +298,15 @@ export function apply(ctx: Context): void {
         console.warn(`[dsh-taskboard] external sync startup skipped; storage unavailable (${storage.directory()}):`, error)
       })
       agentDisposers.push(() => externalSync.dispose())
+      // GitHub Project write-back (P2): observe every committed status change
+      // so GUI moves, agent tools and execution settlement all write through.
+      const githubWriteback = new GithubWritebackService({
+        store,
+        connection: () => externalSync.hostConnection(),
+        now,
+      })
+      agentDisposers.push(store.onTaskMoved((task, from, to) => githubWriteback.afterMove(task, from, to)))
+      agentDisposers.push(() => githubWriteback.dispose())
       let disposeRoutes: (() => void) | undefined
       agentCtx.inject(['webServer'], (webCtx: Context) => {
         disposeRoutes = registerTaskboardRoutes(webCtx, {

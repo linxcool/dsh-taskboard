@@ -52,6 +52,11 @@ export function createBuiltinProviders(): ExternalProviderRegistry {
         { key: 'urgentLabels', label: 'ext.urgentPriorities', defaultValue: 'urgent,high,紧急,高' },
         { key: 'relaxedLabels', label: 'ext.relaxedPriorities', defaultValue: 'low,nice to have,低' },
         { key: 'requestIntervalMs', label: 'ext.requestInterval', defaultValue: '100' },
+        { key: 'writebackMode', label: 'ext.writebackMode', defaultValue: 'off' },
+        { key: 'projectOwner', label: 'ext.projectOwner', defaultValue: '' },
+        { key: 'projectNumber', label: 'ext.projectNumber', defaultValue: '' },
+        { key: 'statusField', label: 'ext.statusField', defaultValue: 'Status' },
+        { key: 'statusMap', label: 'ext.statusMap', defaultValue: 'backlog=待澄清,todo=就绪,in_progress=执行中,in_review=待你验收,done=完成,canceled=取消' },
       ],
       capabilities: { itemTypes: ['issue'], projectDiscovery: true, accountDiscovery: true, pagination: 'page', incremental: false } },
     validate: config => {
@@ -60,6 +65,21 @@ export function createBuiltinProviders(): ExternalProviderRegistry {
       if (config.mappings.some(m => !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(m.projectId))) throw new Error('GitHub project IDs must be owner/repo')
       const interval = Number(config.settings.requestIntervalMs ?? 100)
       if (!Number.isInteger(interval) || interval < 0 || interval > 10_000) throw new Error('request interval must be 0–10000 milliseconds')
+      const mode = (config.settings.writebackMode ?? 'off').toLowerCase()
+      if (!['off', 'status', 'comment', 'both'].includes(mode)) throw new Error('GitHub write-back mode must be off, status, comment or both')
+      if (mode !== 'off') {
+        const number = Number(config.settings.projectNumber ?? '')
+        if (!Number.isSafeInteger(number) || number <= 0) throw new Error('GitHub Project number must be a positive integer')
+        const map = config.settings.statusMap ?? ''
+        for (const entry of map.split(',')) {
+          if (!entry.trim()) continue
+          const separator = entry.indexOf('=')
+          const key = separator < 0 ? '' : entry.slice(0, separator).trim()
+          if (!['backlog', 'todo', 'in_progress', 'in_review', 'done', 'canceled'].includes(key) || !entry.slice(separator + 1).trim()) {
+            throw new Error('GitHub status map entries must look like column=option')
+          }
+        }
+      }
     },
     create: config => new GithubProvider(config),
   })

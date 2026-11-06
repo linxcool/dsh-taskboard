@@ -18,6 +18,7 @@ import {
   pruneExecutions,
   type TaskLedger,
   type TaskRecord,
+  type TaskStatus,
 } from '../shared/protocol.ts'
 import type { StorageQueue } from './storage-queue.ts'
 import { normalizeExternalSource, normalizeExternalSyncRecords } from '../shared/external.ts'
@@ -53,6 +54,8 @@ export class TaskStore {
   private readonly storageQueue?: StorageQueue
   private ledger: TaskLedger = emptyLedger()
   private readonly subscribers = new Set<(change: LedgerChange) => void>()
+  /** Observers for committed status transitions (host-side integrations). */
+  private readonly moveListeners = new Set<(task: TaskRecord, from: TaskStatus, to: TaskStatus) => void>()
   private queue: Promise<unknown> = Promise.resolve()
   private loaded = false
   private loadPromise: Promise<void> | undefined
@@ -231,6 +234,17 @@ export class TaskStore {
   }
 
   /**
+   * Subscribe to committed status transitions from any writer (GUI routes,
+   * agent tools, execution settlement). Listeners run after the write is
+   * persisted; their errors never abort it. Ledger replacements (import) do
+   * not emit transitions.
+   */
+  onTaskMoved(fn: (task: TaskRecord, from: TaskStatus, to: TaskStatus) => void): () => void {
+    this.moveListeners.add(fn)
+    return () => this.moveListeners.delete(fn)
+  }
+
+  /**
    * Write a timestamped backup copy of the current ledger next to the live
    * file (import-replace safety, 0.4.0). Never throws the caller's flow —
    * a backup failure fails the import itself.
@@ -264,6 +278,7 @@ export class TaskStore {
         // Reload under the lock: a cached-revision check before it leaves a
         // TOCTOU window in which two writers emit the same next revision.
         await this.reload()
+        const beforeStatus = new Map(this.ledger.tasks.map(task => [task.id, task.status] as const))
         const draft: TaskLedger = structuredClone(this.ledger)
         const changed = mutator(draft)
         if (changed === undefined) return { ledger: deepFreeze(structuredClone(this.ledger)), changed: [] }
@@ -277,6 +292,17 @@ export class TaskStore {
           try {
             fn(change)
           } catch { /* subscriber errors never abort the write */ }
+        }
+        if (kind !== 'ledger-replaced') {
+          for (const task of changed) {
+            const from = beforeStatus.get(task.id)
+            if (from === undefined || from === task.status) continue
+            for (const fn of this.moveListeners) {
+              try {
+                fn(task, from, task.status)
+              } catch { /* observers never abort the write */ }
+            }
+          }
         }
         return {
           ledger: deepFreeze(structuredClone(draft)),

@@ -88,6 +88,14 @@ export class ExternalSyncService {
       requiresMappingReview: config?.provider === 'zentao' && !config.mappingMode,
       lastResult: record?.lastResult, lastError: this.volatileError ?? record?.lastError, lastAttemptAt: record?.lastAttemptAt, ignoredCount: record?.ignored.length ?? 0 }
   }
+  /**
+   * Host-only snapshot of the active connection INCLUDING credentials. Used
+   * by host-side integrations (GitHub write-back); never serialize or expose
+   * this to the browser.
+   */
+  hostConnection(): ExternalConfig | undefined {
+    return this.state.config
+  }
   async configure(raw: unknown): Promise<void> {
     await this.ready
     if (this.running) throw new Error('sync is running')
