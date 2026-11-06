@@ -77,6 +77,12 @@ node node_modules/vitest/vitest.mjs run
 node node_modules/tsdown/dist/run.mjs -c tsdown.config.ts
 ```
 
+### 联调状态（2026-11-06）
+
+- **只读联调已通过**：P1 provider 对 `linxcool/hdefense` 实际拉取 52 条 open issue（PR 已过滤）；Project #1 的 Status 选项与默认映射完全一致；P2 lookup 查询命中 `hdefense#1`（Project 1 / owner `linxcool`）。
+- **主机级集成测试**：`tests/github-workflow.spec.ts` 覆盖「外部同步导入 → 看板移卡 → Project Status + Issue 评论」，网络全部 mock。
+- **待授权**：真实写入 GitHub 的端到端验证（需要用户指定可安全改动的 Issue）。
+
 ---
 
 ## 安装与回滚
