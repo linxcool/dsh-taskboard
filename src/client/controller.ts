@@ -9,8 +9,8 @@ import type { SessionArchiveResult } from '../shared/api.ts'
  * @module dsh-taskboard/client/controller
  */
 import type { AttachmentUpload, ChangeEvent, DiagnosticsResponse, QueueClearResponse, QueueSummary, DiffResponse, ImportCommitResponse, ImportPreviewResponse, MergeRepoResult, PromptCompletionsResponse, StorageStatus, TaskTemplate, TaskTemplateSpec, UpdateTaskBody, WorkspaceView } from '../shared/api.ts'
-import type { ChecklistItem, TaskLedger, TaskRecord, Urgency } from '../shared/protocol.ts'
-import { emptyLedger } from '../shared/protocol.ts'
+import type { ChecklistItem, TaskLedger, TaskRecord, TaskStatus, Urgency } from '../shared/protocol.ts'
+import { MAIN_STATUSES, emptyLedger } from '../shared/protocol.ts'
 import type { TaskboardClient } from './api.ts'
 import type { SessionJumpResult } from './session-jump.ts'
 import { translate } from './i18n/runtime.ts'
@@ -31,25 +31,52 @@ export type SortBy = 'default' | 'updated' | 'urgency' | 'created' | 'title'
 /** localStorage key for persisted view state (filters + sort). */
 const VIEW_KEY = 'dsh-taskboard-view-v1'
 
+/** The legacy per-column collapse booleans this list replaced. */
+type LegacyCollapseView = {
+  collapsedColumns?: unknown
+  backlogCollapsed?: boolean
+  todoCollapsed?: boolean
+  doneCollapsed?: boolean
+}
+
+/**
+ * Collapsed columns for a persisted (or fresh) view.
+ *
+ * An explicit `collapsedColumns` list is authoritative — the user may have
+ * expanded the canceled column on purpose. Otherwise the legacy booleans are
+ * collected, and the canceled column starts collapsed because six columns do
+ * not fit comfortably and cancelled work is rarely the focus.
+ */
+export function migrateCollapsedColumns(view: LegacyCollapseView): TaskStatus[] {
+  const allowed = new Set<string>(MAIN_STATUSES)
+  if (Array.isArray(view.collapsedColumns)) {
+    return view.collapsedColumns.filter((status): status is TaskStatus => typeof status === 'string' && allowed.has(status))
+  }
+  const collapsed: TaskStatus[] = []
+  if (view.backlogCollapsed === true) collapsed.push('backlog')
+  if (view.todoCollapsed === true) collapsed.push('todo')
+  if (view.doneCollapsed === true) collapsed.push('done')
+  collapsed.push('canceled')
+  return collapsed
+}
+
 /** Load the persisted view state (never throws; fresh on any parse error). */
-function loadView(): { workspaceId?: string; urgencies: Urgency[]; externalOnly?: boolean; sortBy: SortBy; doneCollapsed: boolean; backlogCollapsed: boolean; todoCollapsed: boolean; collapsedWorkspaceGroups?: string[] } {
+function loadView(): { workspaceId?: string; urgencies: Urgency[]; externalOnly?: boolean; sortBy: SortBy; collapsedColumns: TaskStatus[]; collapsedWorkspaceGroups?: string[] } {
   try {
     const raw = localStorage.getItem(VIEW_KEY)
-    if (raw === null) return { urgencies: [], sortBy: 'default', doneCollapsed: false, backlogCollapsed: false, todoCollapsed: false }
-    const parsed = JSON.parse(raw) as { workspaceId?: string; urgencies?: Urgency[]; externalOnly?: boolean; sortBy?: SortBy; doneCollapsed?: boolean; backlogCollapsed?: boolean; todoCollapsed?: boolean; collapsedWorkspaceGroups?: unknown }
+    if (raw === null) return { urgencies: [], sortBy: 'default', collapsedColumns: migrateCollapsedColumns({}) }
+    const parsed = JSON.parse(raw) as { workspaceId?: string; urgencies?: Urgency[]; externalOnly?: boolean; sortBy?: SortBy; collapsedWorkspaceGroups?: unknown } & LegacyCollapseView
     const sortBy = parsed.sortBy === 'updated' || parsed.sortBy === 'urgency' || parsed.sortBy === 'created' || parsed.sortBy === 'title' ? parsed.sortBy : 'default'
     return {
       workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : undefined,
       urgencies: Array.isArray(parsed.urgencies) ? parsed.urgencies.filter(u => u === 'urgent' || u === 'normal' || u === 'relaxed') : [],
       externalOnly: parsed.externalOnly === true,
       sortBy,
-      doneCollapsed: parsed.doneCollapsed === true,
-      backlogCollapsed: parsed.backlogCollapsed === true,
-      todoCollapsed: parsed.todoCollapsed === true,
+      collapsedColumns: migrateCollapsedColumns(parsed),
       collapsedWorkspaceGroups: Array.isArray(parsed.collapsedWorkspaceGroups) ? parsed.collapsedWorkspaceGroups.filter((key): key is string => typeof key === 'string') : [],
     }
   } catch {
-    return { urgencies: [], sortBy: 'default', doneCollapsed: false, backlogCollapsed: false, todoCollapsed: false }
+    return { urgencies: [], sortBy: 'default', collapsedColumns: migrateCollapsedColumns({}) }
   }
 }
 
@@ -64,11 +91,8 @@ export interface ControllerState {
   search: string
   /** Column sort order. */
   sortBy: SortBy
-  /** Completed (done) column collapsed state; persisted in localStorage. */
-  doneCollapsed: boolean
-  /** Backlog and todo column collapse states; persisted locally. */
-  backlogCollapsed: boolean
-  todoCollapsed: boolean
+  /** Collapsed board columns (persisted locally). */
+  collapsedColumns: TaskStatus[]
   /** Collapsed project groups, keyed by column and workspace; persisted locally. */
   collapsedWorkspaceGroups: string[]
   /** Total count of live completed tasks reported by the host. */
@@ -118,9 +142,7 @@ function initialState(): ControllerState {
     filters: { workspaceId: view.workspaceId, urgencies: view.urgencies, externalOnly: view.externalOnly === true },
     search: '',
     sortBy: view.sortBy,
-    doneCollapsed: view.doneCollapsed,
-    backlogCollapsed: view.backlogCollapsed,
-    todoCollapsed: view.todoCollapsed,
+    collapsedColumns: view.collapsedColumns,
     collapsedWorkspaceGroups: view.collapsedWorkspaceGroups ?? [],
     composerOpen: false,
     secondaryOpen: false,
@@ -214,7 +236,7 @@ export class BoardController {
         // frame.
         for (let round = 0; round < 3; round++) {
           const [ledgerResult, workspacesResult] = await Promise.allSettled([
-            Promise.resolve().then(() => this.client.state({ excludeDone: this.state.doneCollapsed })),
+            Promise.resolve().then(() => this.client.state({ excludeDone: this.state.collapsedColumns.includes('done') })),
             Promise.resolve().then(() => this.client.workspaces()),
           ])
           const patch: Partial<ControllerState> = {}
@@ -307,26 +329,29 @@ export class BoardController {
     this.persistView()
   }
 
-  /** Set the completed (done) column collapsed state (persisted). */
-  setDoneCollapsed(collapsed: boolean): void {
-    const prev = this.state.doneCollapsed
-    this.setState({ doneCollapsed: collapsed })
+  /** Set one column's collapsed state (persisted). Expanding the done column refetches. */
+  setColumnCollapsed(status: TaskStatus, collapsed: boolean): void {
+    const current = this.state.collapsedColumns
+    const has = current.includes(status)
+    if (collapsed === has) return
+    this.setState({ collapsedColumns: collapsed ? [...current, status] : current.filter(item => item !== status) })
     this.persistView()
-    if (prev && !collapsed) {
+    if (status === 'done' && has && !collapsed) {
       void this.refresh()
     }
   }
 
+  /** Set the completed (done) column collapsed state (persisted). */
+  setDoneCollapsed(collapsed: boolean): void {
+    this.setColumnCollapsed('done', collapsed)
+  }
+
   setBacklogCollapsed(collapsed: boolean): void {
-    if (this.state.backlogCollapsed === collapsed) return
-    this.setState({ backlogCollapsed: collapsed })
-    this.persistView()
+    this.setColumnCollapsed('backlog', collapsed)
   }
 
   setTodoCollapsed(collapsed: boolean): void {
-    if (this.state.todoCollapsed === collapsed) return
-    this.setState({ todoCollapsed: collapsed })
-    this.persistView()
+    this.setColumnCollapsed('todo', collapsed)
   }
 
   isWorkspaceGroupCollapsed(column: string, workspaceId?: string): boolean {
@@ -348,9 +373,7 @@ export class BoardController {
         urgencies: this.state.filters.urgencies,
         externalOnly: this.state.filters.externalOnly === true,
         sortBy: this.state.sortBy,
-        doneCollapsed: this.state.doneCollapsed,
-        backlogCollapsed: this.state.backlogCollapsed,
-        todoCollapsed: this.state.todoCollapsed,
+        collapsedColumns: this.state.collapsedColumns,
         collapsedWorkspaceGroups: this.state.collapsedWorkspaceGroups,
       }))
     } catch { /* storage unavailable (private mode etc.) — view just won't persist */ }

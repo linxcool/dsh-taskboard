@@ -189,6 +189,12 @@ describe('client half', () => {
     // Let the refresh land and React commit outside act().
     await new Promise(r => setTimeout(r, 20))
 
+    // Six columns, and the canceled one starts collapsed (six do not fit, and
+    // cancelled work is rarely the focus) — expand it so every column head is
+    // reachable for the dot assertions below.
+    controller.setColumnCollapsed('canceled', false)
+    await new Promise(r => setTimeout(r, 20))
+
     // Main view: one column head per main status, each starting with its
     // status dot placed before the label text.
     const heads = () => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead'))
@@ -1013,7 +1019,7 @@ describe('client half', () => {
 
     const controller = new BoardController(client as never)
     // 默认未折叠，初始值为 false
-    expect(controller.getSnapshot().doneCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(false)
 
     controller.start()
     await new Promise(r => setTimeout(r, 10))
@@ -1025,9 +1031,9 @@ describe('client half', () => {
     // 切换为收起：应更新状态并持久化到 localStorage
     stateCalls.length = 0
     controller.setDoneCollapsed(true)
-    expect(controller.getSnapshot().doneCollapsed).toBe(true)
-    const persisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { doneCollapsed?: boolean }
-    expect(persisted.doneCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(true)
+    const persisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { collapsedColumns?: string[] }
+    expect(persisted.collapsedColumns?.includes('done')).toBe(true)
 
     // 在收起状态下刷新：应传递 excludeDone: true
     await controller.refresh()
@@ -1037,12 +1043,12 @@ describe('client half', () => {
 
     // 实例化新控制器：自动从 localStorage 读取到 doneCollapsed: true
     const newController = new BoardController(client as never)
-    expect(newController.getSnapshot().doneCollapsed).toBe(true)
+    expect(newController.getSnapshot().collapsedColumns.includes('done')).toBe(true)
 
     // 展开：自动触发一次 refresh，拉取全量任务
     stateCalls.length = 0
     controller.setDoneCollapsed(false)
-    expect(controller.getSnapshot().doneCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(false)
     await new Promise(r => setTimeout(r, 10))
     expect(stateCalls[stateCalls.length - 1]?.excludeDone).toBe(false)
     expect(controller.getSnapshot().ledger.tasks.length).toBe(1)
@@ -1073,7 +1079,7 @@ describe('client half', () => {
     // @tc TC-FUNC-001
     // 实例化全新 BoardController，默认未折叠，初始值为 false
     const controller = new BoardController(client as never)
-    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
 
     // @tc TC-FUNC-002
     // 切换为收起：快照变为 true，通知订阅者，不触发网络请求或全量刷新
@@ -1081,19 +1087,19 @@ describe('client half', () => {
     const unsub = controller.subscribe(() => { notifyCount++ })
     refreshCalls = 0
     controller.setBacklogCollapsed(true)
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
     expect(notifyCount).toBe(1)
     expect(refreshCalls).toBe(0)
 
     // @tc TC-FUNC-004
     // persistView 正常保存 backlogCollapsed 且保留其他视图状态
-    const persisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { backlogCollapsed?: boolean }
-    expect(persisted.backlogCollapsed).toBe(true)
+    const persisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { collapsedColumns?: string[] }
+    expect(persisted.collapsedColumns?.includes('backlog')).toBe(true)
 
     // @tc TC-FUNC-003
     // 切换为展开：快照恢复为 false，且不得触发 refresh()（RT-001 质询明确要求）
     controller.setBacklogCollapsed(false)
-    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
     await new Promise(r => setTimeout(r, 10))
     expect(refreshCalls).toBe(0)
 
@@ -1111,7 +1117,7 @@ describe('client half', () => {
     // loadView 预设 {"backlogCollapsed": true, "sortBy": "title"} 时新实例正确读取
     localStorage.setItem('dsh-taskboard-view-v1', JSON.stringify({ backlogCollapsed: true, sortBy: 'title' }))
     const hydratedController = new BoardController(client as never)
-    expect(hydratedController.getSnapshot().backlogCollapsed).toBe(true)
+    expect(hydratedController.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
     expect(hydratedController.getSnapshot().sortBy).toBe('title')
     hydratedController.dispose()
 
@@ -1119,14 +1125,14 @@ describe('client half', () => {
     // 存储为 null 时安全降级为 false
     localStorage.clear()
     const nullController = new BoardController(client as never)
-    expect(nullController.getSnapshot().backlogCollapsed).toBe(false)
+    expect(nullController.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
     nullController.dispose()
 
     // @tc TC-EDGE-002
     // 损坏的存储数据 (Malformed JSON) 安全降级为 false
     localStorage.setItem('dsh-taskboard-view-v1', '{ invalid json')
     const malformedController = new BoardController(client as never)
-    expect(malformedController.getSnapshot().backlogCollapsed).toBe(false)
+    expect(malformedController.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
     malformedController.dispose()
 
     // @tc TC-EDGE-003
@@ -1134,7 +1140,7 @@ describe('client half', () => {
     for (const dirtyVal of ['true', 1, {}, null, [true]]) {
       localStorage.setItem('dsh-taskboard-view-v1', JSON.stringify({ backlogCollapsed: dirtyVal }))
       const dirtyController = new BoardController(client as never)
-      expect(dirtyController.getSnapshot().backlogCollapsed).toBe(false)
+      expect(dirtyController.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
       dirtyController.dispose()
     }
 
@@ -1142,8 +1148,8 @@ describe('client half', () => {
     // 历史版本数据迁移兼容：已有 urgencies/sortBy/doneCollapsed 但无 backlogCollapsed
     localStorage.setItem('dsh-taskboard-view-v1', JSON.stringify({ urgencies: ['urgent'], sortBy: 'urgency', doneCollapsed: true }))
     const legacyController = new BoardController(client as never)
-    expect(legacyController.getSnapshot().doneCollapsed).toBe(true)
-    expect(legacyController.getSnapshot().backlogCollapsed).toBe(false)
+    expect(legacyController.getSnapshot().collapsedColumns.includes('done')).toBe(true)
+    expect(legacyController.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
     expect(legacyController.getSnapshot().sortBy).toBe('urgency')
     legacyController.dispose()
 
@@ -1154,7 +1160,7 @@ describe('client half', () => {
     })
     try {
       expect(() => { controller.setBacklogCollapsed(false) }).not.toThrow()
-      expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+      expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
       expect(setItem).toHaveBeenCalledOnce()
       expect(setItem).toHaveBeenCalledWith('dsh-taskboard-view-v1', expect.any(String))
     } finally {
@@ -1166,9 +1172,9 @@ describe('client half', () => {
     controller.setBacklogCollapsed(true)
     controller.setBacklogCollapsed(false)
     controller.setBacklogCollapsed(true)
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
-    const finalPersisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { backlogCollapsed?: boolean }
-    expect(finalPersisted.backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
+    const finalPersisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { collapsedColumns?: string[] }
+    expect(finalPersisted.collapsedColumns?.includes('backlog')).toBe(true)
 
     // @tc TC-CONC-004
     // 独立性互不干扰：doneCollapsed 与 backlogCollapsed 并发修改
@@ -1178,11 +1184,11 @@ describe('client half', () => {
     controller.setDoneCollapsed(false)
     await new Promise(r => setTimeout(r, 10))
     expect(refreshCalls).toBe(1) // setDoneCollapsed(false) 触发 refresh
-    expect(controller.getSnapshot().doneCollapsed).toBe(false)
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true) // backlog 依然为 true
-    const dualPersisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { doneCollapsed?: boolean; backlogCollapsed?: boolean }
-    expect(dualPersisted.doneCollapsed).toBe(false)
-    expect(dualPersisted.backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true) // backlog 依然为 true
+    const dualPersisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { collapsedColumns?: string[] }
+    expect(dualPersisted.collapsedColumns?.includes('done')).toBe(false)
+    expect(dualPersisted.collapsedColumns?.includes('backlog')).toBe(true)
 
     unsub()
     controller.dispose()
@@ -1203,21 +1209,21 @@ describe('client half', () => {
     }
 
     const controller = new BoardController(client as never)
-    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(false)
 
     let notifyCount = 0
     const unsub = controller.subscribe(() => { notifyCount++ })
     refreshCalls = 0
     controller.setTodoCollapsed(true)
-    expect(controller.getSnapshot().todoCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(true)
     expect(notifyCount).toBe(1)
     expect(refreshCalls).toBe(0)
 
-    const persisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { todoCollapsed?: boolean }
-    expect(persisted.todoCollapsed).toBe(true)
+    const persisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { collapsedColumns?: string[] }
+    expect(persisted.collapsedColumns?.includes('todo')).toBe(true)
 
     controller.setTodoCollapsed(false)
-    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(false)
     await new Promise(r => setTimeout(r, 10))
     expect(refreshCalls).toBe(0)
 
@@ -1233,7 +1239,7 @@ describe('client half', () => {
     // loadView 预设读取
     localStorage.setItem('dsh-taskboard-view-v1', JSON.stringify({ todoCollapsed: true, sortBy: 'created' }))
     const hydrated = new BoardController(client as never)
-    expect(hydrated.getSnapshot().todoCollapsed).toBe(true)
+    expect(hydrated.getSnapshot().collapsedColumns.includes('todo')).toBe(true)
     expect(hydrated.getSnapshot().sortBy).toBe('created')
     hydrated.dispose()
 
@@ -1241,7 +1247,7 @@ describe('client half', () => {
     for (const dirtyVal of ['true', 1, {}, null, [true]]) {
       localStorage.setItem('dsh-taskboard-view-v1', JSON.stringify({ todoCollapsed: dirtyVal }))
       const dirty = new BoardController(client as never)
-      expect(dirty.getSnapshot().todoCollapsed).toBe(false)
+      expect(dirty.getSnapshot().collapsedColumns.includes('todo')).toBe(false)
       dirty.dispose()
     }
 
@@ -1249,13 +1255,13 @@ describe('client half', () => {
     controller.setDoneCollapsed(true)
     controller.setBacklogCollapsed(true)
     controller.setTodoCollapsed(true)
-    expect(controller.getSnapshot().doneCollapsed).toBe(true)
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
-    expect(controller.getSnapshot().todoCollapsed).toBe(true)
-    const triplePersisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { doneCollapsed?: boolean; backlogCollapsed?: boolean; todoCollapsed?: boolean }
-    expect(triplePersisted.doneCollapsed).toBe(true)
-    expect(triplePersisted.backlogCollapsed).toBe(true)
-    expect(triplePersisted.todoCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(true)
+    const triplePersisted = JSON.parse(localStorage.getItem('dsh-taskboard-view-v1')!) as { collapsedColumns?: string[] }
+    expect(triplePersisted.collapsedColumns?.includes('done')).toBe(true)
+    expect(triplePersisted.collapsedColumns?.includes('backlog')).toBe(true)
+    expect(triplePersisted.collapsedColumns?.includes('todo')).toBe(true)
 
     unsub()
     controller.dispose()
@@ -2652,21 +2658,28 @@ describe('client half', () => {
     root.render(React.createElement(TaskBoard, { controller }))
     await new Promise(r => setTimeout(r, 10))
 
-    // 1. 默认展开状态：已完成列有卡片，且没有 data-collapsed
-    let collapsedCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')
-    expect(collapsedCol).toBeNull()
+    /** The column whose status dot matches `status` (collapsed or not). */
+    const columnFor = (status: string): HTMLElement | undefined => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-column'))
+      .find(column => column.querySelector(`.dsh-atb-dot[data-status="${status}"]`) !== null)
+    const collapsedColumnFor = (status: string): HTMLElement | undefined =>
+      Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-column[data-collapsed="true"]'))
+        .find(column => column.querySelector(`.dsh-atb-dot[data-status="${status}"]`) !== null)
+
+    // 1. 默认展开状态：已完成列展开（取消列默认折叠，与它无关）
+    expect(collapsedColumnFor('done')).toBeUndefined()
+    const doneColumn = columnFor('done')
+    expect(doneColumn).toBeDefined()
 
     // 找到已完成列的收起按钮并点击
-    const foldBtns = host.querySelectorAll<HTMLButtonElement>('.dsh-atb-colfoldbtn')
-    expect(foldBtns.length).toBeGreaterThan(0)
-    const doneFoldBtn = Array.from(foldBtns).find(btn => btn.title.includes('已完成')) ?? foldBtns[foldBtns.length - 1]!
+    const doneFoldBtn = doneColumn!.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
+    expect(doneFoldBtn).not.toBeNull()
     doneFoldBtn.click()
     await new Promise(r => setTimeout(r, 10))
 
     // 2. 收起状态：渲染 data-collapsed="true" 竖条，展示总数
-    expect(controller.getSnapshot().doneCollapsed).toBe(true)
-    collapsedCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')
-    expect(collapsedCol).not.toBeNull()
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(true)
+    const collapsedCol = collapsedColumnFor('done')
+    expect(collapsedCol).toBeDefined()
     const countEl = collapsedCol!.querySelector('.dsh-atb-colcount')
     expect(countEl?.textContent).toBe('1')
 
@@ -2701,8 +2714,8 @@ describe('client half', () => {
     expect(expandBtn).not.toBeNull()
     expandBtn!.click()
     await new Promise(r => setTimeout(r, 10))
-    expect(controller.getSnapshot().doneCollapsed).toBe(false)
-    expect(host.querySelector('.dsh-atb-column[data-collapsed="true"]')).toBeNull()
+    expect(controller.getSnapshot().collapsedColumns.includes('done')).toBe(false)
+    expect(collapsedColumnFor('done')).toBeUndefined()
 
     root.unmount()
     host.remove()
@@ -2814,7 +2827,7 @@ describe('client half', () => {
     // 点击待规划列头收起按钮，触发 controller.setBacklogCollapsed(true)
     collapseBtn!.click()
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
 
     // @tc TC-FUNC-008
     // 收起态紧凑条渲染为 .dsh-atb-column[data-collapsed="true"]，包含 .dsh-atb-col-collapsed-bar
@@ -2839,17 +2852,18 @@ describe('client half', () => {
 
     // @tc TC-FUNC-010
     // 点击收起态展开按钮，恢复展开态，且 stopPropagation 避免冒泡触发外层
-    const collapseCalls: boolean[] = []
-    const origSetBacklogCollapsed = controller.setBacklogCollapsed.bind(controller)
-    controller.setBacklogCollapsed = (val: boolean) => {
-      collapseCalls.push(val)
-      origSetBacklogCollapsed(val)
+    // （六列后折叠走统一的 setColumnCollapsed(status, collapsed)）
+    const collapseCalls: Array<[string, boolean]> = []
+    const origSetColumnCollapsed = controller.setColumnCollapsed.bind(controller)
+    controller.setColumnCollapsed = (status: string, val: boolean) => {
+      collapseCalls.push([status, val])
+      origSetColumnCollapsed(status as never, val)
     }
     expandBtn.click()
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
-    expect(collapseCalls).toEqual([false]) // 恰好调用 1 次，验证 stopPropagation 阻止向父节点冒泡
-    controller.setBacklogCollapsed = origSetBacklogCollapsed
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
+    expect(collapseCalls).toEqual([['backlog', false]]) // 恰好调用 1 次，验证 stopPropagation 阻止向父节点冒泡
+    controller.setColumnCollapsed = origSetColumnCollapsed
 
     // @tc TC-FUNC-011
     // 再次收起，然后测试点击收起条空白区域触发展开
@@ -2858,7 +2872,7 @@ describe('client half', () => {
     const bar2 = host.querySelector('.dsh-atb-col-collapsed-bar')!
     bar2.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(false)
 
     // 重新切为收起状态供后续拖拽与边界测试使用
     controller.setBacklogCollapsed(true)
@@ -2980,12 +2994,13 @@ describe('client half', () => {
     await new Promise(r => setTimeout(r, 20))
 
     // @tc TC-EDGE-007
-    // 双端折叠共存布局边界：backlogCollapsed 与 doneCollapsed 同时为 true
+    // 双端折叠共存布局边界：backlog 与 done 同时折叠（canceled 默认折叠，共三列）
     controller.setDoneCollapsed(true)
     await new Promise(r => setTimeout(r, 20))
-    const collapsedCols = host.querySelectorAll('.dsh-atb-column[data-collapsed="true"]')
-    expect(collapsedCols.length).toBe(2) // 首尾两列均折叠
-    // 中间三列依然存在
+    const collapsedStatuses = Array.from(host.querySelectorAll('.dsh-atb-column[data-collapsed="true"]'))
+      .map(column => column.querySelector('.dsh-atb-dot')?.getAttribute('data-status'))
+    expect(collapsedStatuses.sort()).toEqual(['backlog', 'canceled', 'done'])
+    // 其余列依然存在
     const allColumns = host.querySelectorAll('.dsh-atb-column')
     expect(allColumns.length).toBe(MAIN_STATUSES.length)
     controller.setDoneCollapsed(false)
@@ -3008,7 +3023,7 @@ describe('client half', () => {
     currentTasks = [...initialTasks, taskB4]
     await controller.refresh()
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
     curCountEl = host.querySelector('.dsh-atb-column[data-collapsed="true"] .dsh-atb-colcount')!
     expect(curCountEl.textContent).toBe('4')
 
@@ -3025,14 +3040,14 @@ describe('client half', () => {
     const colNow = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
     colNow.dispatchEvent(dropConflictEvt)
     await new Promise(r => setTimeout(r, 30))
-    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
     expect(host.querySelector('.dsh-atb-column[data-collapsed="true"]')).not.toBeNull()
 
     // ── 待办 (todo) 列折叠交互与拖拽验证 ───────────────────────
     // 先恢复 backlog 展开
     controller.setBacklogCollapsed(false)
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(false)
 
     // 待办列头具备收起按钮
     const todoCol = host.querySelectorAll('.dsh-atb-column')[1]!
@@ -3044,7 +3059,7 @@ describe('client half', () => {
     // 点击收起待办列
     todoCollapseBtn.click()
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().todoCollapsed).toBe(true)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(true)
 
     // 收起态紧凑条验证
     const collapsedTodoCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
@@ -3059,7 +3074,7 @@ describe('client half', () => {
     expect(todoExpandBtn.getAttribute('title')).toBe('展开「待办」列')
     todoExpandBtn.click()
     await new Promise(r => setTimeout(r, 20))
-    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+    expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(false)
 
     // 再次收起并测试拖拽卡片放入待办列
     controller.setTodoCollapsed(true)

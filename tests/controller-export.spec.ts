@@ -38,7 +38,7 @@ it.each(['json', 'csv'] as const)('%s export includes completed tasks while keep
     const body = f.download.mock.calls[0]![1]
     for (const id of ['t-todo', 't-done', 't-archive', 't-new']) expect(body).toContain(id)
     if (format === 'json') expect(JSON.parse(body).settings).toEqual(f.ledger.settings)
-    expect(f.controller.getSnapshot().doneCollapsed).toBe(true)
+    expect(f.controller.getSnapshot().collapsedColumns.includes('done')).toBe(true)
     expect(f.controller.getSnapshot().ledger.tasks).toHaveLength(2)
   } finally { f.controller.dispose() }
 })

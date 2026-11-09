@@ -18,7 +18,7 @@
  */
 import type { TaskStatus, Urgency } from '../../shared/protocol.ts'
 
-/** Column header keys on the five-column main board (+ secondary tab). */
+/** Column header keys on the six-column main board (+ secondary tab). */
 export const COLUMN_KEYS: Readonly<Record<TaskStatus, string>> = {
   backlog: 'status.column.backlog',
   todo: 'status.column.todo',
@@ -27,6 +27,26 @@ export const COLUMN_KEYS: Readonly<Record<TaskStatus, string>> = {
   done: 'status.column.done',
   canceled: 'status.column.canceled',
   archived: 'status.column.archived',
+}
+
+/** Fold-button titles for the main columns (archived has no column to fold). */
+export const COLUMN_COLLAPSE_KEYS: Readonly<Partial<Record<TaskStatus, string>>> = {
+  backlog: 'board.column.collapseBacklog',
+  todo: 'board.column.collapseTodo',
+  in_progress: 'board.column.collapseInProgress',
+  in_review: 'board.column.collapseInReview',
+  done: 'board.column.collapseDone',
+  canceled: 'board.column.collapseCanceled',
+}
+
+/** Expand-bar titles for the main columns. */
+export const COLUMN_EXPAND_KEYS: Readonly<Partial<Record<TaskStatus, string>>> = {
+  backlog: 'board.column.expandBacklog',
+  todo: 'board.column.expandTodo',
+  in_progress: 'board.column.expandInProgress',
+  in_review: 'board.column.expandInReview',
+  done: 'board.column.expandDone',
+  canceled: 'board.column.expandCanceled',
 }
 
 /** Status pill keys (detail pane) — historical wording kept verbatim:

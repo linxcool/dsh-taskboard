@@ -91,16 +91,19 @@ describe('board rendering', () => {
     controller.start()
     await new Promise(resolve => setTimeout(resolve, 30))
 
-    // Main view: six column heads, the last one carrying the canceled dot.
-    const heads = () => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead'))
-    expect(heads()).toHaveLength(MAIN_STATUSES.length)
-    const dots = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead .dsh-atb-dot'))
-    expect(dots[dots.length - 1]?.dataset.status).toBe('canceled')
-    // The canceled card is inside the canceled column, not hidden away.
-    const canceledColumn = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-column'))
-      .find(column => column.querySelector('.dsh-atb-dot[data-status="canceled"]') !== null)
-    expect(canceledColumn).toBeDefined()
+    // Main view: six columns (the canceled one starts collapsed, so it renders
+    // a compact bar instead of a full head), the last carrying the canceled dot.
+    const columns = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-column'))
+    expect(columns).toHaveLength(MAIN_STATUSES.length)
+    expect(columns[columns.length - 1]?.querySelector('.dsh-atb-dot')?.getAttribute('data-status')).toBe('canceled')
+
+    // The canceled card lives in that column. Open it first, then look for the card.
+    const canceledColumn = columns[columns.length - 1]
+    expect(canceledColumn?.getAttribute('data-collapsed')).toBe('true')
+    canceledColumn?.querySelector<HTMLElement>('.dsh-atb-col-collapsed-bar')?.click()
+    await new Promise(resolve => setTimeout(resolve, 30))
     expect(canceledColumn?.textContent ?? '').toContain('t-2')
+    expect(host.querySelectorAll('.dsh-atb-colhead')).toHaveLength(MAIN_STATUSES.length)
 
     // Secondary tab: no canceled group any more; archived and trashed remain.
     controller.toggleSecondary()

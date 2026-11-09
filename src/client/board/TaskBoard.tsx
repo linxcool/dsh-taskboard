@@ -9,7 +9,7 @@ import type { BoardController, ControllerState } from '../controller.ts'
 import type { TaskRecord, TaskStatus, Urgency } from '../../shared/protocol.ts'
 import { MAIN_STATUSES, canTransition, completedDisplayLimitOf } from '../../shared/protocol.ts'
 import { PLUGIN_VERSION } from '../../shared/version.ts'
-import { COLUMN_KEYS, URGENCY_KEYS } from './labels.ts'
+import { COLUMN_COLLAPSE_KEYS, COLUMN_EXPAND_KEYS, COLUMN_KEYS, URGENCY_KEYS } from './labels.ts'
 import { useT } from '../i18n/runtime.ts'
 import { localizeBuiltinName, localizeBuiltinTask } from '../i18n/templates.ts'
 import { categoryLabel, groupTemplatesByCategory } from '../template-categories.ts'
@@ -417,18 +417,10 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                 void controller.move(id, task.version, status)
               }
 
-              const isCollapsed = (isBacklog && state.backlogCollapsed)
-                || (isTodo && state.todoCollapsed)
-                || (isDone && state.doneCollapsed)
+              const isCollapsed = state.collapsedColumns.includes(status)
               if (isCollapsed) {
-                const expandTitle = isBacklog ? t('board.column.expandBacklog')
-                  : isTodo ? t('board.column.expandTodo')
-                  : t('board.column.expandDone')
-                const onExpand = () => {
-                  if (isBacklog) controller.setBacklogCollapsed(false)
-                  else if (isTodo) controller.setTodoCollapsed(false)
-                  else controller.setDoneCollapsed(false)
-                }
+                const expandTitle = t(COLUMN_EXPAND_KEYS[status] ?? COLUMN_KEYS[status])
+                const onExpand = () => { controller.setColumnCollapsed(status, false) }
                 const count = isDone ? (state.doneCount ?? columnTasks.length) : columnTasks.length
 
                 return (
@@ -507,36 +499,12 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                         onClick={() => controller.openQueuePanel()}
                       >{t('board.queue.chip', { n: state.queue?.depth ?? 0 })}</button>
                     )}
-                    {isBacklog && (
+                    {COLUMN_COLLAPSE_KEYS[status] !== undefined && (
                       <button
                         type="button"
                         className="dsh-atb-colfoldbtn"
-                        title={t('board.column.collapseBacklog')}
-                        onClick={() => controller.setBacklogCollapsed(true)}
-                      >
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-                          <path d="M10 3.5a.5.5 0 0 0-.854-.354l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .854-.354v-8z" />
-                        </svg>
-                      </button>
-                    )}
-                    {isTodo && (
-                      <button
-                        type="button"
-                        className="dsh-atb-colfoldbtn"
-                        title={t('board.column.collapseTodo')}
-                        onClick={() => controller.setTodoCollapsed(true)}
-                      >
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-                          <path d="M10 3.5a.5.5 0 0 0-.854-.354l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .854-.354v-8z" />
-                        </svg>
-                      </button>
-                    )}
-                    {isDone && (
-                      <button
-                        type="button"
-                        className="dsh-atb-colfoldbtn"
-                        title={t('board.column.collapseDone')}
-                        onClick={() => controller.setDoneCollapsed(true)}
+                        title={t(COLUMN_COLLAPSE_KEYS[status]!)}
+                        onClick={() => controller.setColumnCollapsed(status, true)}
                       >
                         <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                           <path d="M10 3.5a.5.5 0 0 0-.854-.354l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .854-.354v-8z" />
