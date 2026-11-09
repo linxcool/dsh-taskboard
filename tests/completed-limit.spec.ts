@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BoardController } from '../src/client/controller.ts'
 import { TaskBoard, sortDoneTasks, groupAndSortTasksByWorkspace } from '../src/client/board/TaskBoard.tsx'
-import type { TaskRecord, BoardSettings } from '../src/shared/protocol.ts'
+import { MAIN_STATUSES, type TaskRecord, type BoardSettings } from '../src/shared/protocol.ts'
 import { waitFor } from './wait-for.ts'
 import { disposeI18n } from '../src/client/i18n/runtime.ts'
 
@@ -65,7 +65,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
     const { host } = await renderBoard(tasks)
 
     // Locate the done column
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const columns = Array.from(host.querySelectorAll('.dsh-atb-column'))
     const doneCol = columns[4]! // backlog, todo, in_progress, in_review, done
 
@@ -89,7 +89,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
     const tasks: TaskRecord[] = Array.from({ length: 30 }, (_, i) => makeTask(`done-${i}`, i))
     const { host } = await renderBoard(tasks, { completedDisplayLimit: 20 })
 
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const doneCol = host.querySelectorAll('.dsh-atb-column')[4]!
 
     expect(doneCol.querySelector('.dsh-atb-colcount')?.textContent).toBe('30')
@@ -104,7 +104,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
     const tasks: TaskRecord[] = Array.from({ length: 55 }, (_, i) => makeTask(`done-${i}`, i))
     const { host } = await renderBoard(tasks)
 
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const doneCol = host.querySelectorAll('.dsh-atb-column')[4]!
     expect(doneCol.querySelectorAll('.dsh-atb-card').length).toBe(50)
 
@@ -127,7 +127,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
     const tasks: TaskRecord[] = Array.from({ length: 60 }, (_, i) => makeTask(`done-${i}`, i))
     const { host, controller } = await renderBoard(tasks)
 
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const doneCol = host.querySelectorAll('.dsh-atb-column')[4]!
     expect(doneCol.querySelectorAll('.dsh-atb-card').length).toBe(50)
 
@@ -155,7 +155,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
 
     const { host } = await renderBoard([taskOld, taskMid, taskNew])
 
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const doneCol = host.querySelectorAll('.dsh-atb-column')[4]!
     const cards = Array.from(doneCol.querySelectorAll('.dsh-atb-card'))
 
@@ -171,7 +171,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
     const tasks: TaskRecord[] = Array.from({ length: 60 }, (_, i) => makeTask(`done-${i}`, i))
     const { host } = await renderBoard(tasks)
 
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const doneCol = host.querySelectorAll('.dsh-atb-column')[4]!
     const cards = Array.from(doneCol.querySelectorAll('.dsh-atb-card'))
 
@@ -259,7 +259,7 @@ describe('TaskBoard completed tasks display limit and foldbar', () => {
 
     root.render(React.createElement(TaskBoard, { controller }))
 
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
     const doneCol = host.querySelectorAll('.dsh-atb-column')[4]!
 
     // The first workspace group must be Zebra Project because it contains the newest completed task

@@ -18,8 +18,9 @@ import { applyHumanWaitingPatch } from './human-wait.ts'
 
 /**
  * Task lifecycle states. Main board columns render `backlog → todo →
- * in_progress → in_review → done`; `canceled` and `archived` are secondary
- * states collected under an "other tasks" tab. `blocked` is NOT a status —
+ * in_progress → in_review → done → canceled` (the six GitHub Project Status
+ * options); `archived` is the only secondary state, collected under an
+ * "other tasks" tab together with the trash. `blocked` is NOT a status —
  * it is a horizontal marker any non-terminal state may carry.
  */
 export type TaskStatus =
@@ -31,17 +32,18 @@ export type TaskStatus =
   | 'canceled'
   | 'archived'
 
-/** Statuses shown as the five main board columns, in order. */
+/** Statuses shown as the six main board columns, in order. */
 export const MAIN_STATUSES: readonly TaskStatus[] = [
   'backlog',
   'todo',
   'in_progress',
   'in_review',
   'done',
+  'canceled',
 ]
 
 /** Statuses collected under the secondary tab. */
-export const SECONDARY_STATUSES: readonly TaskStatus[] = ['canceled', 'archived']
+export const SECONDARY_STATUSES: readonly TaskStatus[] = ['archived']
 
 /** Every valid status, main first. */
 export const ALL_STATUSES: readonly TaskStatus[] = [...MAIN_STATUSES, ...SECONDARY_STATUSES]

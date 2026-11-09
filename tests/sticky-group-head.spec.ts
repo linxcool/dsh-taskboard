@@ -20,7 +20,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BoardController } from '../src/client/controller.ts'
 import { TaskBoard } from '../src/client/board/TaskBoard.tsx'
-import type { TaskRecord } from '../src/shared/protocol.ts'
+import { MAIN_STATUSES, type TaskRecord } from '../src/shared/protocol.ts'
 import { waitFor } from './wait-for.ts'
 import { disposeI18n } from '../src/client/i18n/runtime.ts'
 
@@ -158,7 +158,7 @@ describe('sticky project group headers', () => {
 
   it('pins .dsh-atb-ws-group-head to the top of its card scroller', async () => {
     const host = await renderBoard([makeTask('a-1', 'ws-a'), makeTask('a-2', 'ws-a'), makeTask('b-1', 'ws-b')])
-    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === 5)
+    await waitFor(() => host.querySelectorAll('.dsh-atb-column').length === MAIN_STATUSES.length)
 
     const heads = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-ws-group-head'))
     expect(heads.length).toBeGreaterThan(0)

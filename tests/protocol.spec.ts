@@ -13,6 +13,7 @@ import {
   DEFAULT_ISOLATION,
   DEFAULT_PERMISSION,
   MAIN_STATUSES,
+  SECONDARY_STATUSES,
   asBoardSettings,
   asPermission,
   canTransition,
@@ -90,8 +91,11 @@ describe('state machine', () => {
   })
 
   it('covers every status in the column vocabulary', () => {
-    expect(MAIN_STATUSES).toHaveLength(5)
+    // Six main columns since 0.9.12: the board mirrors the six GitHub Project
+    // Status options, so `canceled` moved out of the secondary tab.
+    expect(MAIN_STATUSES).toHaveLength(6)
     expect(ALL_STATUSES).toHaveLength(7)
+    expect(SECONDARY_STATUSES).toEqual(['archived'])
   })
 })
 

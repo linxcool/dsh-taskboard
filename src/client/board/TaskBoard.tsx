@@ -772,7 +772,6 @@ function SecondaryTab({ controller, tasks }: { controller: BoardController; task
   // but what matters to the user is the pending purge).
   const trashed = tasks.filter(t => t.trashedAt !== undefined)
   const archived = tasks.filter(t => t.trashedAt === undefined && t.status === 'archived')
-  const canceled = tasks.filter(t => t.trashedAt === undefined && t.status === 'canceled')
 
   const toggleSelected = (id: string) => {
     setSelected(prev => {
@@ -824,11 +823,10 @@ function SecondaryTab({ controller, tasks }: { controller: BoardController; task
   }
 
   const groups: { label: string; dot: string; rows: TaskRecord[]; action?: 'trashArchived' | 'purgeTrashed' }[] = [
-    { label: t('status.column.canceled'), dot: 'canceled', rows: canceled },
     { label: t('status.column.archived'), dot: 'archived', rows: archived, action: 'trashArchived' },
     { label: t('board.group.trashed'), dot: 'trashed', rows: trashed, action: 'purgeTrashed' },
   ]
-  if (trashed.length + archived.length + canceled.length === 0) {
+  if (trashed.length + archived.length === 0) {
     return (
       <div className="dsh-atb-secondary">
         <div className="dsh-atb-empty">{t('board.secondary.empty')}</div>

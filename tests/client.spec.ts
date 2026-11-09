@@ -201,13 +201,15 @@ describe('client half', () => {
     const dotStatuses = heads().map(h => h.querySelector<HTMLElement>('.dsh-atb-dot')!.dataset.status)
     expect(dotStatuses).toEqual([...MAIN_STATUSES])
 
-    // Secondary tab: canceled / archived / trashed groups wear their dots too.
+    // Secondary tab (six-column board, 0.9.12+): canceled is now a MAIN
+    // column, so only archived / trashed keep their dots here.
     controller.toggleSecondary()
     await new Promise(r => setTimeout(r, 20))
-    for (const key of ['canceled', 'archived', 'trashed']) {
+    for (const key of ['archived', 'trashed']) {
       const dot = host.querySelector<HTMLElement>(`.dsh-atb-colhead .dsh-atb-dot[data-status="${key}"]`)
       expect(dot, `secondary dot for ${key}`).not.toBeNull()
     }
+    expect(host.querySelector('.dsh-atb-colhead .dsh-atb-dot[data-status="canceled"]')).toBeNull()
 
     root.unmount()
     host.remove()
@@ -2714,6 +2716,7 @@ describe('client half', () => {
     const { createRoot } = await import('react-dom/client')
     const { BoardController } = await import('../src/client/controller.ts')
     const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+    const { MAIN_STATUSES } = await import('../src/shared/protocol.ts')
 
     const taskB1 = {
       id: 't-b1', title: 'Backlog Task 1', description: '', prompt: '', workspaceId: 'ws-a',
@@ -2984,7 +2987,7 @@ describe('client half', () => {
     expect(collapsedCols.length).toBe(2) // 首尾两列均折叠
     // 中间三列依然存在
     const allColumns = host.querySelectorAll('.dsh-atb-column')
-    expect(allColumns.length).toBe(5)
+    expect(allColumns.length).toBe(MAIN_STATUSES.length)
     controller.setDoneCollapsed(false)
     await new Promise(r => setTimeout(r, 20))
 
