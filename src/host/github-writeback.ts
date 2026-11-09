@@ -1,4 +1,5 @@
 import type { ExternalConfig } from '../shared/external.ts'
+import { parseStatusMap } from '../shared/github-status-map.ts'
 import { newCommentId, normalizeBody, type TaskRecord, type TaskStatus } from '../shared/protocol.ts'
 import type { TaskStore } from './store.ts'
 
@@ -14,14 +15,8 @@ import type { TaskStore } from './store.ts'
 
 const DEFAULT_BASE_URL = 'https://api.github.com'
 const GITHUB_API_VERSION = '2022-11-28'
-const STATUSES: readonly TaskStatus[] = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'canceled']
 const MODES = ['off', 'status', 'comment', 'both'] as const
 type Mode = (typeof MODES)[number]
-
-/** Default board-column → Project Status option names. */
-const DEFAULT_STATUS_MAP: Partial<Record<TaskStatus, string>> = {
-  backlog: '待澄清', todo: '就绪', in_progress: '执行中', in_review: '待你验收', done: '完成', canceled: '取消',
-}
 
 const LOOKUP_QUERY = `query TaskboardIssueStatus($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -81,20 +76,6 @@ function objectOf(value: unknown): Record<string, unknown> | undefined {
 }
 function arrayOf(value: unknown): unknown[] | undefined {
   return Array.isArray(value) ? value : undefined
-}
-
-/** Parse `column=option,column=option`; unknown columns are ignored. */
-function parseStatusMap(raw: string | undefined): Partial<Record<TaskStatus, string>> {
-  const map: Partial<Record<TaskStatus, string>> = { ...DEFAULT_STATUS_MAP }
-  for (const entry of (raw ?? '').split(',')) {
-    const separator = entry.indexOf('=')
-    if (separator < 0) continue
-    const key = entry.slice(0, separator).trim() as TaskStatus
-    const value = entry.slice(separator + 1).trim()
-    if (!STATUSES.includes(key) || !value) continue
-    map[key] = value
-  }
-  return map
 }
 
 export class GithubWritebackService {
