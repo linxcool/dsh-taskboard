@@ -16,7 +16,7 @@ A **task board plugin for DeepSeek Harness**: humans create cards, agents claim 
 - **Execution**: manual, one-shot scheduled, or host-side periodic cron runs (keep running when the browser closes); scheduled tasks can reuse an existing session in the selected project; periodic tasks can return to todo each round or keep a review record while creating the next todo card
 - **Git worktree isolation**: each run works on its own worktree + dedicated task branch, one-click merge at acceptance; parallel multi-repo workspaces are mirrored whole (0.6.3); non-git projects fall back automatically
 - **Efficient acceptance**: DoD acceptance checklists (agent checks items off with evidence), structured execution reports (summary / changed files / checks / artifacts / risks), in-board diff viewer
-- **Live board**: SSE real-time refresh, five-column flow, persisted filters & sorting, JSON import/export, task templates
+- **Live board**: SSE real-time refresh, six-column flow (the canceled column starts collapsed), persisted filters & sorting, JSON import/export, task templates
 - **External task sync**: ZenTao project/execution Bugs, Stories and Tasks, plus TAPD Bugs/Stories/Tasks, with assignee filtering, polling, project mapping and conflict protection. See External task sync below.
 
 **Zero configuration**: install and it works — no tokens, no API keys, no extra services or databases.
@@ -114,7 +114,7 @@ Available in any session. Project boundary: only sessions belonging to the task'
 ## Features
 
 **Board collaboration**
-- Five-column board (Backlog / Todo / In Progress / In Review / Done) + blocked markers, SSE real-time refresh
+- Six-column board (Needs clarification / Ready / In progress / Awaiting your review / Done / Canceled) + blocked markers, SSE real-time refresh; the column set and names follow the GitHub Project Status options (the connection's status map wins), and the canceled column starts collapsed
 - Tasks belong to projects: claiming validates session ownership — no snatching across projects
 - Three-color urgency (urgent red / normal purple / relaxed blue) with filtering and color bars; search (title / ID) and in-column sorting; filters and sorting persist
 - Status-colored dots on column headers: backlog gray / todo blue / in-progress orange / in-review purple / done green / deleted red

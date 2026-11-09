@@ -49,7 +49,7 @@ describe('canceled column drop', () => {
       stream: () => () => {},
       move: async (id: string, body: { ifVersion: number; status: string }) => {
         moves.push({ id, version: body.ifVersion, status: body.status })
-        return { task: { ...(tasks as never[])[0] } }
+        return {}
       },
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {

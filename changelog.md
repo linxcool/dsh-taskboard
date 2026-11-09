@@ -1,5 +1,16 @@
 # 更新日志 / Changelog
 
+### 0.9.12 — 2026-11-09
+
+- **六列看板**：主列新增「取消」，列集合与列名对齐 GitHub Project 的 Status 选项；取消列默认折叠，可拖入取消，详情页的取消入口保留。「其他任务」页只剩归档与回收站。
+- **列名来源**：配置了 GitHub 连接时，列头使用连接的 statusMap 里的选项名；未配置时使用内置文案（同步改为 GitHub 词汇：待澄清 / 就绪 / 执行中 / 待你验收 / 完成 / 取消）。
+- **折叠状态泛化**：原来按列分开的三个布尔改为一份折叠列表，取消列默认折叠；旧浏览器里保存的折叠状态会自动迁移。
+
+**English:**
+
+- **Six-column board**: the main board gains a Canceled column; the column set and names follow the GitHub Project Status options. The canceled column starts collapsed, accepts drops, and the detail-pane cancel action stays. The secondary tab keeps only archived and trashed cards.
+- **Label source**: with a GitHub connection the headers use the connection's statusMap option names; without one the shipped copy is used (now aligned to the GitHub vocabulary).
+- **Generalized collapse state**: the three per-column booleans become one collapsed-columns list, with the canceled column closed by default; older browser state migrates automatically.
 ### 0.9.11 — 2026-11-05
 
 - **看板级分支命名预设**：看板设置新增「分支命名」——四预设（`task/标题+ID` 默认 / `task/ID` / `前缀/ID` / `前缀/标题+ID`）+ 条件前缀输入与实时示例预览，中文标题也能生成纯英文分支（[#98](https://github.com/cloader/dsh-taskboard/issues/98)）。
