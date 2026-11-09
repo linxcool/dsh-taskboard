@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>交互稿 · 员工绑定（dsh-taskboard）</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --line: #e3e6ea;
+    --line-strong: #cfd4da;
+    --text: #1f2329;
+    --muted: #6b7280;
+    --faint: #9aa1ab;
+    --accent: #2f6fdd;
+    --accent-soft: #e8f0fe;
+    --maker: #2f6fdd;
+    --reviewer: #8e4ec6;
+    --warn: #c2410c;
+    --warn-soft: #fff1e6;
+    --ok: #2e9e6b;
+    --radius: 10px;
+    --shadow: 0 8px 28px rgba(16, 24, 40, .12), 0 2px 6px rgba(16, 24, 40, .06);
+    --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #eceef1;
+    color: var(--text);
+    font: 13px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── 稿子自身的框架（不属于产品 UI） ───────────────────────── */
+  .specbar {
+    flex: 0 0 auto; background: #1f2329; color: #d7dbe0;
+    display: flex; align-items: center; gap: 14px; padding: 8px 14px;
+  }
+  .specbar b { color: #fff; font-weight: 600; }
+  .specbar .tag {
+    font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    background: #33383f; color: #aeb6c0;
+  }
+  .steps { display: flex; gap: 6px; margin-left: auto; }
+  .steps button {
+    font: inherit; font-size: 12px; color: #aeb6c0; background: transparent;
+    border: 1px solid #3a4048; border-radius: 999px; padding: 3px 11px; cursor: pointer;
+  }
+  .steps button:hover { color: #fff; border-color: #5a626c; }
+  .steps button[aria-current="true"] { background: #fff; color: #1f2329; border-color: #fff; font-weight: 600; }
+
+  /* ── 模拟的应用窗口 ────────────────────────────────────────── */
+  .stage { flex: 1 1 auto; padding: 12px; min-height: 0; }
+  .app {
+    height: 100%; display: grid; grid-template-columns: 178px 1fr;
+    background: var(--bg); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(16,24,40,.08), 0 10px 30px rgba(16,24,40,.08);
+    border: 1px solid var(--line-strong);
+    position: relative;
+  }
+  .side {
+    background: #fbfbfc; border-right: 1px solid var(--line);
+    padding: 12px 10px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .side .brand { font-weight: 700; font-size: 12px; color: var(--muted); padding: 4px 8px 10px; letter-spacing: .04em; }
+  .side .item { padding: 6px 9px; border-radius: 7px; color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 7px; }
+  .side .item.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .main { display: flex; flex-direction: column; min-width: 0; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .topbar h1 { font-size: 14px; margin: 0 10px 0 0; font-weight: 700; }
+  .btn {
+    font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 7px;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--text); cursor: pointer;
+  }
+  .btn:hover { border-color: #aab2bc; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: #2861c4; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: #eef0f3; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .spacer { flex: 1 1 auto; }
+
+  .board { flex: 1 1 auto; display: flex; gap: 10px; padding: 12px 14px 10px; overflow: auto; min-height: 0; }
+  .col { flex: 1 1 0; min-width: 132px; display: flex; flex-direction: column; gap: 8px; }
+  /* 取消列默认折叠：与「已完成列折叠」同一套交互，省宽度 */
+  .col.collapsed { flex: 0 0 64px; min-width: 64px; align-items: center; cursor: pointer; }
+  .col.collapsed .colhead {
+    flex-direction: column; gap: 2px; padding: 8px 0; font-size: 11.5px;
+    background: #f3f5f8; border-radius: 8px; width: 100%; align-items: center;
+  }
+  .col.collapsed .colhead .count { font-size: 11px; }
+  .colhead { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; padding: 2px 2px 4px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .dot.todo { background: var(--accent); }
+  .dot.doing { background: #e08a2e; }
+  .dot.review { background: var(--reviewer); }
+  .dot.done { background: var(--ok); }
+  .dot.canceled { background: #c2453d; }
+  .count { color: var(--faint); font-weight: 500; }
+  .kcard {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 9px; font-size: 12px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .kcard .ktitle { font-weight: 600; line-height: 1.4; }
+  .kcard .kmeta { display: flex; gap: 5px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1.5;
+    padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong);
+    background: #f7f8fa; color: var(--muted); white-space: nowrap;
+  }
+  .chip.maker { border-color: #c9dcfb; background: var(--accent-soft); color: var(--maker); }
+  .chip.reviewer { border-color: #e3d3f5; background: #f5edfc; color: var(--reviewer); }
+  .chip.warn { border-color: #f5cdb4; background: var(--warn-soft); color: var(--warn); }
+  .chip.lock { border-color: #d8dde3; background: #f2f4f7; color: #59616b; }
+  .chip.sess { border-color: #cdd9ea; background: #eef4fb; color: #2b5f9e; font-family: var(--mono); font-size: 10.5px; cursor: pointer; }
+  .chip.sess:hover { background: #e2ecf9; border-color: #b9cbe3; }
+
+  /* 会话列表 popover */
+  .popover {
+    position: fixed; z-index: 60; width: 336px; background: #fff;
+    border: 1px solid var(--line-strong); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 9px 10px 8px;
+  }
+  .pophead { display: flex; align-items: center; gap: 6px; padding: 0 2px 7px; border-bottom: 1px solid var(--line); }
+  .pophead b { font-size: 12.5px; }
+  .pophead .count { font-size: 11px; color: var(--faint); }
+  .pophead .btn { margin-left: auto; padding: 1px 7px; }
+  .srow {
+    display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: transparent;
+    padding: 6px 5px; border-radius: 7px; cursor: pointer; font: inherit; text-align: left; color: var(--text);
+  }
+  .srow:hover { background: #f4f6f9; }
+  .srow .smeta { margin-left: auto; color: var(--faint); font-size: 11px; white-space: nowrap; }
+  .srow .live { color: var(--ok); font-weight: 600; }
+  .popfoot { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 6px; font-size: 11.5px; color: var(--muted); text-align: center; cursor: pointer; }
+  .popfoot:hover { color: var(--accent); }
+
+  /* ── 弹层 ─────────────────────────────────────────────────── */
+  .layer { position: absolute; inset: 0; background: rgba(23, 28, 35, .34); display: none; padding: 22px; overflow: auto; }
+  .layer.on { display: block; }
+  .modal {
+    background: var(--panel); border-radius: 12px; box-shadow: var(--shadow);
+    max-width: 880px; margin: 0 auto; border: 1px solid var(--line);
+  }
+  .modal.narrow { max-width: 620px; }
+  .mhead { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .mhead .icon { font-size: 18px; line-height: 1.2; }
+  .mhead h2 { margin: 0; font-size: 14.5px; }
+  .mhead p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+  .mhead .x { margin-left: auto; }
+  .mbody { padding: 14px 16px 16px; }
+  .mfoot { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; background: #fbfbfc; border-radius: 0 0 12px 12px; }
+  .mfoot .hint { font-size: 11.5px; color: var(--faint); }
+
+  /* 员工目录 */
+  .egrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 10px; }
+  .emp {
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px;
+    display: flex; flex-direction: column; gap: 8px; background: #fff; transition: border-color .12s, background .12s;
+  }
+  .emp:hover { border-color: #b9c2cd; }
+  .emp[data-state="disabled"] { background: #f7f8fa; border-style: dashed; }
+  .emp[data-state="disabled"] .ename, .emp[data-state="disabled"] .eid { color: var(--faint); }
+  .emp[data-state="stale"] { background: #fffbf8; border-color: #f0d6c2; }
+  .emp[data-state="unassigned"] { background: #fcfcfd; }
+  .ehead { display: flex; align-items: center; gap: 6px; }
+  .ename { font-weight: 650; font-size: 13px; }
+  .eid { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .estate { margin-left: auto; }
+  .erow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .erow .label { font-size: 11.5px; color: var(--muted); min-width: 30px; }
+  select.mini, .emp select {
+    font: inherit; font-size: 11.5px; padding: 2px 5px; border-radius: 6px;
+    border: 1px solid var(--line-strong); background: #fff; color: var(--text); cursor: pointer;
+  }
+  .rolechip { cursor: pointer; border: 1px solid transparent; }
+  .rolechip:hover { filter: brightness(.97); }
+  .switch { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); cursor: pointer; user-select: none; }
+  .switch input { appearance: none; width: 26px; height: 15px; border-radius: 999px; background: #d5dae0; position: relative; cursor: pointer; transition: background .14s; margin: 0; }
+  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .14s; }
+  .switch input:checked { background: var(--ok); }
+  .switch input:checked::after { transform: translateX(11px); }
+  .eactions { display: flex; gap: 6px; margin-top: 2px; }
+  .eactions .btn { padding: 3px 9px; font-size: 11.5px; }
+  .star { background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .35; }
+  .star.on { opacity: 1; }
+  .empty-note { font-size: 11.5px; color: var(--faint); }
+
+  /* 建卡表单 */
+  .form2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 11px; }
+  .field > label { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .field .val { font-size: 12.5px; }
+  .field select, .field input[type="text"] {
+    font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 7px;
+    border: 1px solid var(--line-strong); background: #fff; width: 100%;
+  }
+  .textarea {
+    min-height: 150px; border: 1px solid var(--line-strong); border-radius: 7px;
+    padding: 8px; font-size: 12.5px; color: var(--muted); background: #fff; white-space: pre-wrap;
+  }
+  .derived {
+    font-size: 11.5px; color: var(--muted); background: #f7f8fa; border: 1px dashed var(--line-strong);
+    border-radius: 7px; padding: 7px 9px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .derived b { color: var(--text); font-weight: 600; }
+  .override-note { font-size: 11px; color: var(--warn); }
+
+  /* 评审 */
+  .detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; }
+  .panel { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; background: #fff; }
+  .panel h4 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .reviewprev .kv { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; }
+  .reviewprev .kv span:first-child { color: var(--muted); min-width: 72px; }
+  .lockline { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 7px 9px; border-radius: 8px; background: #f2f4f7; font-size: 11.5px; color: #4b5563; }
+  .panel.flash { animation: flash 900ms ease; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 3px rgba(47,111,221,.35); } 100% { box-shadow: 0 0 0 0 rgba(47,111,221,0); } }
+
+  /* 说明块 */
+  .note {
+    flex: 0 0 auto; margin: 0 14px 12px; background: #fff; border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--accent); border-radius: 8px; padding: 9px 11px;
+    font-size: 11.5px; line-height: 1.5; color: #3c434c;
+  }
+  .note b { color: var(--text); }
+  .note ul { margin: 5px 0 0; padding-left: 17px; }
+  .note li { margin: 2px 0; }
+  .note code { font-family: var(--mono); font-size: 11px; background: #f2f4f7; padding: 1px 4px; border-radius: 4px; }
+  .q { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 7px; }
+  .q .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 999px; overflow: hidden; }
+  .q .seg button { font: inherit; font-size: 11.5px; padding: 3px 10px; border: 0; background: #fff; color: var(--muted); cursor: pointer; }
+  .q .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="specbar">
+  <b>交互稿 · 员工绑定</b>
+  <span class="tag">不是最终样式，只看交互与信息层级</span>
+  <div class="steps">
+    <button data-step="catalog" aria-current="true">① 员工目录</button>
+    <button data-step="create">② 建卡表单</button>
+    <button data-step="review">③ 发起评审</button>
+    <button data-step="board">④ 看板列</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="app" id="app">
+    <aside class="side">
+      <div class="brand">DSH</div>
+      <div class="item">💬 会话</div>
+      <div class="item on">🗂 任务看板</div>
+      <div class="item">🧩 插件</div>
+      <div class="item">⚙ 设置</div>
+    </aside>
+    <div class="main">
+      <div class="topbar">
+        <h1>任务看板</h1>
+        <button class="btn ghost">全部项目 ▾</button>
+        <div class="spacer"></div>
+        <button class="btn" data-open="catalog">👥 员工</button>
+        <button class="btn">＋ 新建任务</button>
+        <button class="btn ghost">🛠 设置</button>
+      </div>
+
+      <div class="board">
+        <div class="col">
+          <div class="colhead"><i class="dot"></i>待澄清 <span class="count">1</span></div>
+          <div class="kcard">
+            <div class="ktitle">对齐 GitHub 项目字段</div>
+            <div class="kmeta"><span class="chip">一般</span><span class="chip">dsh-taskboard</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="colhead"><i class="dot todo"></i>就绪 <span class="count">2</span></div>
+          <div class="kcard">
+            <div class="ktitle">issue #49 登录超时</div>
+            <div class="kmeta"><span class="chip warn">紧急</span><span class="chip maker">执行 · standard</span><span class="chip sess" onclick="openSessions(event, 't-49')">🤖 3f2a ↗</span></div>
+          </div>
+          <div class="kcard">
+            <div class="ktitle">评审：登录超时修复</div>
+            <div class="kmeta"><span class="chip reviewer">🧪 评审 · reviewer</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="colhead"><i class="dot doing"></i>执行中 <span class="count">1</span></div>
+          <div class="kcard">
+            <div class="ktitle">修复 #49 会话超时</div>
+            <div class="kmeta"><span class="chip">task/49-login</span><span class="chip">工作树</span><span class="chip sess" onclick="openSessions(event, 't-52')">🤖 c81d ↗</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="colhead"><i class="dot review"></i>待你验收 <span class="count">1</span></div>
+          <div class="kcard">
+            <div class="ktitle">#48 分页拉取过滤 PR</div>
+            <div class="kmeta"><span class="chip">☑ 3/3</span><span class="chip reviewer">评审未完成</span><span class="chip sess" onclick="openSessions(event, 't-48')">🤖 9c71 ↗</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="colhead"><i class="dot done"></i>完成 <span class="count">0</span></div>
+        </div>
+        <div class="col collapsed" id="col-cancel" data-collapsed="true" onclick="toggleCancel()">
+          <div class="colhead" title="取消（点击展开 / 收起）">
+            <i class="dot canceled"></i>取消 <span class="count">2</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="layer" id="layer"></div>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   这是交互稿，不是产品代码。
+   状态表模拟「绑定表 + preset 目录」两件事：
+   - presets: DSH 里实际存在的 preset（id / name）
+   - employees: 看板持有的绑定表（presetId / role / permission / enabled / defaultReviewer）
+   未出现在 employees 里的 preset = 未分配。
+   ───────────────────────────────────────────────────────────── */
+
+const presets = [
+  { id: 'standard', name: 'Standard' },
+  { id: 'reviewer', name: 'Reviewer' },
+  { id: 'auditor', name: 'Code Auditor' },
+  { id: 'code-auditor-v2', name: 'Code Auditor v2' },
+  { id: 'spike-runner', name: 'Spike Runner' }
+];
+
+/* 已失效绑定：presetId 不在 presets 里 */
+let staleBinding = { presetId: 'legacy-review', name: 'Legacy Review', role: 'reviewer', permission: null, enabled: true, defaultReviewer: false };
+
+let employees = [
+  { presetId: 'standard', role: 'maker', permission: 'workspace-write', enabled: true, defaultReviewer: false },
+  { presetId: 'reviewer', role: 'reviewer', permission: null, enabled: true, defaultReviewer: true },
+  { presetId: 'auditor', role: 'reviewer', permission: 'read-only', enabled: false, defaultReviewer: false }
+  /* code-auditor-v2 与 spike-runner 故意不绑定 → 未分配 */
+];
+
+/* 已定：评审角色没显式配权限时，建卡用看板默认；评审卡本身仍恒为只读。 */
+const boardDefault = 'workspace-write';
+
+/* 会话：任务 ↔ 执行会话 的关联是这版稿子补上的可见性 */
+const SESSIONS = { standard: '3f2a', reviewer: '9c71', auditor: 'b204' };
+function sessionChip(presetId) {
+  const s = SESSIONS[presetId];
+  return s
+    ? `<span class="chip sess" title="最近一次执行会话，点击可跳转">🤖 会话 ${s} ↗</span>`
+    : '<span class="empty-note">还没有执行过</span>';
+}
+
+/* 一张卡可能有多轮会话：续跑、定时轮次都算，所以是列表而不是单个 ID */
+const TASK_SESSIONS = {
+  't-49': [
+    { id: '3f2a', preset: 'standard', when: '2 小时前', state: '运行中', live: true, rounds: 3 },
+    { id: 'c81d', preset: 'standard', when: '昨天 18:20', state: '已结束' },
+    { id: '5b02', preset: 'standard', when: '周三 09:12', state: '已结束', rounds: 6 }
+  ],
+  't-52': [
+    { id: 'c81d', preset: 'standard', when: '昨天 18:20', state: '已结束' }
+  ],
+  't-48': [
+    { id: '9c71', preset: 'reviewer', when: '1 小时前', state: '评审中', live: true },
+    { id: '2e40', preset: 'standard', when: '周一 14:05', state: '已结束' }
+  ]
+};
+
+function openSessions(ev, taskId) {
+  ev.stopPropagation();
+  closeSessions();
+  const rows = TASK_SESSIONS[taskId] ?? [];
+  const anchor = ev.currentTarget.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'popover';
+  pop.id = 'sess-pop';
+  pop.onclick = e => e.stopPropagation();
+  pop.innerHTML = `
+    <div class="pophead">
+      <b>执行会话</b><span class="count">${rows.length} 个</span>
+      <button class="btn ghost" onclick="closeSessions(event)">✕</button>
+    </div>
+    ${rows.map(r => `
+      <button class="srow">
+        <span class="chip sess">🤖 ${r.id}</span>
+        <span class="chip ${r.preset === 'reviewer' ? 'reviewer' : 'maker'}">${r.preset}</span>
+        <span class="smeta"><span class="${r.live ? 'live' : ''}">${r.state}</span> · ${r.when}${r.rounds > 1 ? ` · ${r.rounds} 轮` : ''}</span>
+      </button>`).join('')}
+    <div class="popfoot">在详情里看完整执行记录（含提交、报告、Diff）</div>`;
+  document.body.appendChild(pop);
+  const top = Math.min(anchor.bottom + 6, window.innerHeight - pop.offsetHeight - 10);
+  const left = Math.min(Math.max(10, anchor.left), window.innerWidth - pop.offsetWidth - 10);
+  pop.style.top = `${top}px`;
+  pop.style.left = `${left}px`;
+  setTimeout(() => document.addEventListener('click', closeSessions, { once: true }), 0);
+}
+
+function closeSessions() {
+  byId('sess-pop')?.remove();
+  document.removeEventListener('click', closeSessions);
+}
+
+const PERM_LABEL = {
+  'read-only': '🔒 仅可查看',
+  'workspace-write': '📁 可写入工作区',
+  'danger-full-access': '⚡ 完全权限',
+  'null': '跟随看板默认'
+};
+
+const presetName = id => (presets.find(p => p.id === id) || staleBinding).name ?? id;
+const bindingOf = id => employees.find(e => e.presetId === id);
+
+/** 绑定 → 建卡默认权限。核心规则：显式覆盖 > 绑定 > 看板默认。 */
+function defaultPermissionFor(presetId, explicit) {
+  if (explicit) return explicit;
+  const b = bindingOf(presetId);
+  if (b && b.permission) return b.permission;
+  return boardDefault;
+}
+/** 一次评审用哪个 preset：默认评审员工 → 第一个启用的 reviewer → 无 */
+function reviewerForReview() {
+  const on = employees.filter(e => e.role === 'reviewer' && e.enabled);
+  return on.find(e => e.defaultReviewer) || on[0] || null;
+}
+
+/* ── 渲染：员工目录 ─────────────────────────────────────────── */
+function roleChip(b) {
+  const reviewer = b.role === 'reviewer';
+  const text = reviewer ? '评审' : '执行';
+  const star = reviewer
+    ? `<button class="star ${b.defaultReviewer ? 'on' : ''}" title="设为默认评审员工"
+         onclick="toggleDefaultReviewer('${b.presetId}', event)">★</button>`
+    : '';
+  return `<span class="chip rolechip ${reviewer ? 'reviewer' : 'maker'}"
+            title="点击切换角色" onclick="cycleRole('${b.presetId}', event)">${text}</span>${star}`;
+}
+
+function permSelect(b) {
+  const options = [
+    ['', '跟随看板默认（📁）'],
+    ['read-only', PERM_LABEL['read-only']],
+    ['workspace-write', PERM_LABEL['workspace-write']],
+    ['danger-full-access', PERM_LABEL['danger-full-access']]
+  ];
+  return `<select onchange="setPermission('${b.presetId}', this.value)">
+    ${options.map(([v, l]) => `<option value="${v}" ${((b.permission ?? '') === v) ? 'selected' : ''}>${l}</option>`).join('')}
+  </select>`;
+}
+
+function employeeCard(b) {
+  const disabled = !b.enabled;
+  return `<article class="emp" data-state="${disabled ? 'disabled' : 'bound'}" data-emp="${b.presetId}">
+    <div class="ehead">
+      <span class="ename">${presetName(b.presetId)}</span>
+      <span class="estate">${disabled ? '<span class="chip">已停用</span>' : ''}</span>
+    </div>
+    <span class="eid">${b.presetId}</span>
+    <div class="erow"><span class="label">角色</span>${roleChip(b)}</div>
+    <div class="erow"><span class="label">权限</span>${permSelect(b)}</div>
+    <div class="erow"><span class="label">会话</span>${sessionChip(b.presetId)}</div>
+    <div class="erow">
+      <label class="switch">
+        <input type="checkbox" ${b.enabled ? 'checked' : ''} onchange="setEnabled('${b.presetId}', this.checked)">
+        <span>启用</span>
+      </label>
+      <span class="spacer"></span>
+      <button class="btn ghost" onclick="unbind('${b.presetId}')">解除绑定</button>
+    </div>
+    <div class="eactions">
+      <button class="btn primary" ${disabled ? 'disabled title="已停用，先启用才能用它建卡"' : ''} onclick="useEmployee('${b.presetId}')">使用这位员工建卡</button>
+    </div>
+  </article>`;
+}
+
+function unassignedCard(p) {
+  return `<article class="emp" data-state="unassigned" data-emp="${p.id}">
+    <div class="ehead">
+      <span class="ename">${p.name}</span>
+      <span class="estate"><span class="chip">未分配</span></span>
+    </div>
+    <span class="eid">${p.id}</span>
+    <div class="erow"><span class="empty-note">还没有角色，不参与建卡预填。</span></div>
+    <div class="eactions">
+      <select onchange="assign('${p.id}', this.value)">
+        <option value="">选择角色 ▾</option>
+        <option value="maker">分配为执行</option>
+        <option value="reviewer">分配为评审</option>
+      </select>
+    </div>
+  </article>`;
+}
+
+function staleCard(b) {
+  return `<article class="emp" data-state="stale" data-emp="${b.presetId}">
+    <div class="ehead">
+      <span class="ename">${b.name}</span>
+      <span class="estate"><span class="chip warn">预设不可用</span></span>
+    </div>
+    <span class="eid">${b.presetId}</span>
+    <div class="erow"><span class="empty-note">DSH 里已找不到这个 preset；绑定保留，可解除。</span></div>
+    <div class="eactions">
+      <button class="btn ghost" onclick="removeStale()">解除绑定</button>
+    </div>
+  </article>`;
+}
+
+function renderCatalog() {
+  const bound = employees.map(employeeCard).join('');
+  const unassigned = presets.filter(p => !bindingOf(p.id)).map(unassignedCard).join('');
+  const stale = staleBinding ? staleCard(staleBinding) : '';
+  return `
+  <div class="layer on" id="layer">
+    <div class="modal" role="dialog">
+      <div class="mhead">
+        <span class="icon">👥</span>
+        <div>
+          <h2>员工</h2>
+          <p>每个 DSH Agent preset 是一张员工卡。角色与默认权限就在这里改，不再看预设名字猜。</p>
+        </div>
+        <button class="btn ghost x" onclick="closeLayer()">✕</button>
+      </div>
+      <div class="mbody">
+        <div class="egrid">${bound}${unassigned}${stale}</div>
+        <p class="empty-note" style="margin-top:10px">
+          共 ${presets.length + (staleBinding ? 1 : 0)} 个 preset：已绑定 ${employees.length} · 未分配 ${presets.filter(p => !bindingOf(p.id)).length} · 失效 ${staleBinding ? 1 : 0}
+        </p>
+      </div>
+      <div class="mfoot">
+        <span class="hint">建卡表单与 agent 的 <code>taskboard_create</code> 读的是同一张表。</span>
+        <span class="spacer"></span>
+        <button class="btn" onclick="closeLayer()">关闭</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ── 渲染：建卡表单 ─────────────────────────────────────────── */
+function renderCreate(selectedId, override) {
+  const b = bindingOf(selectedId);
+  const role = b ? b.role : null;
+  const explicit = override || '';
+  const perm = defaultPermissionFor(selectedId, explicit);
+  const permSource = explicit
+    ? '本卡显式选择（覆盖绑定）'
+    : (b && b.permission ? '来自员工绑定' : '来自看板默认');
+  return `
+  <div class="layer on" id="layer">
+    <div class="modal" role="dialog">
+      <div class="mhead">
+        <span class="icon">＋</span>
+        <div>
+          <h2>新建任务</h2>
+          <p>从员工目录点「使用」进来时，preset、角色、权限都已经带好。</p>
+        </div>
+        <button class="btn ghost x" onclick="closeLayer()">✕</button>
+      </div>
+      <div class="mbody">
+        <div class="form2">
+          <div>
+            <div class="field">
+              <label>执行模式（preset）</label>
+              <select onchange="renderCreateInto(this.value)">
+                ${presets.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.name}${bindingOf(p.id) ? '' : '（未分配）'}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>员工角色</label>
+              <div class="val">${role === 'reviewer' ? '<span class="chip reviewer">评审</span>' : role === 'maker' ? '<span class="chip maker">执行</span>' : '<span class="chip">未分配</span>'}</div>
+            </div>
+            <div class="field">
+              <label>执行权限</label>
+              <select onchange="renderCreateInto('${selectedId}', this.value)">
+                <option value="" ${explicit === '' ? 'selected' : ''}>跟随员工绑定 / 看板默认</option>
+                <option value="read-only" ${explicit === 'read-only' ? 'selected' : ''}>🔒 仅可查看</option>
+                <option value="workspace-write" ${explicit === 'workspace-write' ? 'selected' : ''}>📁 可写入工作区</option>
+                <option value="danger-full-access" ${explicit === 'danger-full-access' ? 'selected' : ''}>⚡ 完全权限</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>执行方式</label>
+              <select>
+                <option>新建会话（默认）</option>
+                <option>复用最近执行会话（3f2a）</option>
+              </select>
+            </div>
+            <div class="derived">
+              <span>实际生效：<b>${PERM_LABEL[perm] ?? perm}</b></span>
+              <span>来源：${permSource}</span>
+              ${explicit ? '<span class="override-note">这张卡与绑定不一致，仅影响本卡。</span>' : ''}
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label>标题</label>
+              <input type="text" value="修复 #49 会话超时">
+            </div>
+            <div class="field">
+              <label>描述 / Prompt</label>
+              <div class="textarea">issue #49：token 过期后没有触发刷新，页面停在加载态。复现步骤……</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mfoot">
+        <span class="hint">优先级：本卡显式 &gt; 员工绑定 &gt; 看板默认（${PERM_LABEL[boardDefault]}）</span>
+        <span class="spacer"></span>
+        <button class="btn" onclick="closeLayer()">取消</button>
+        <button class="btn primary">创建任务</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ── 渲染：发起评审 ─────────────────────────────────────────── */
+function renderReview() {
+  const r = reviewerForReview();
+  const reviewPreset = r ? r.presetId : null;
+  return `
+  <div class="layer on" id="layer">
+    <div class="modal" role="dialog">
+      <div class="mhead">
+        <span class="icon">🧪</span>
+        <div>
+          <h2>发起评审</h2>
+          <p>点详情页的「🧪 发起评审」会生成一张评审卡。评审卡只读是硬约束，与员工绑定里的权限无关。</p>
+        </div>
+        <button class="btn ghost x" onclick="closeLayer()">✕</button>
+      </div>
+      <div class="mbody">
+        <div class="detail-grid">
+          <div class="panel">
+            <h4>源任务</h4>
+            <div class="ktitle" style="font-size:13px;font-weight:650">修复 #49 会话超时</div>
+            <div class="kmeta" style="margin-top:6px">
+              <span class="chip">进行中</span><span class="chip">task/49-login</span><span class="chip">☑ 2/3</span>
+            </div>
+            <p class="empty-note" style="margin-top:10px">评审卡未完成前，这张卡不能移到「已完成」。门禁逻辑本次不改。</p>
+            <button class="btn primary" style="margin-top:8px" onclick="openReviewPreview()">🧪 发起评审</button>
+          </div>
+          <div class="panel reviewprev" id="preview">
+            ${reviewPreviewHTML()}
+          </div>
+        </div>
+      </div>
+      <div class="mfoot">
+        <span class="hint">${r ? '当前默认评审员工：' + presetName(r.presetId) : '还没有启用的评审员工 → 评审卡会回落到部署默认 preset（不阻塞）'}</span>
+        <span class="spacer"></span>
+        <button class="btn" onclick="closeLayer()">关闭</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function reviewPreviewHTML() {
+  const r = reviewerForReview();
+  return `
+    <h4>评审卡（草稿）</h4>
+    <div class="kv"><span>标题</span><span>评审：修复 #49 会话超时</span></div>
+    <div class="kv"><span>评审对象</span><span class="chip">🧪 修复 #49 会话超时</span></div>
+    <div class="kv"><span>Reviewer</span><span>${r ? `<span class="chip reviewer">${presetName(r.presetId)}</span>` : '<span class="chip">部署默认</span>'}</span></div>
+    <div class="kv"><span>执行权限</span><span class="chip lock">🔒 仅可查看（锁定）</span></div>
+    <div class="kv"><span>评审会话</span><span class="chip sess">执行时新建 ↗</span></div>
+    <div class="lockline">🔒 只读来自「评审卡」本身，不是默认值：绑定里把它改成可写也不会生效。</div>
+    <div class="kv" style="margin-top:8px"><span>门禁</span><span>评审卡完成前，源任务不能 done</span></div>`;
+}
+
+/* ── 交互动作 ───────────────────────────────────────────────── */
+function cycleRole(id, ev) {
+  ev.stopPropagation();
+  const b = bindingOf(id);
+  if (!b) return;
+  b.role = b.role === 'maker' ? 'reviewer' : 'maker';
+  if (b.role === 'maker') b.defaultReviewer = false;
+  redraw();
+}
+function toggleDefaultReviewer(id, ev) {
+  ev.stopPropagation();
+  employees.forEach(e => { e.defaultReviewer = (e.presetId === id) ? !e.defaultReviewer : false; });
+  redraw();
+}
+function setPermission(id, value) {
+  const b = bindingOf(id);
+  if (!b) return;
+  b.permission = value === '' ? null : value;
+  redraw();
+}
+function setEnabled(id, checked) {
+  const b = bindingOf(id);
+  if (!b) return;
+  b.enabled = checked;
+  if (!checked) b.defaultReviewer = false;
+  redraw();
+}
+function unbind(id) {
+  employees = employees.filter(e => e.presetId !== id);
+  redraw();
+}
+function assign(id, role) {
+  if (!role) return;
+  employees.push({ presetId: id, role, permission: null, enabled: true, defaultReviewer: false });
+  redraw();
+}
+function removeStale() { staleBinding = null; redraw(); }
+function useEmployee(id) { renderCreateInto(id); }
+function closeLayer() { byId('layer').classList.remove('on'); }
+
+/* ── 场景切换 ───────────────────────────────────────────────── */
+let step = 'catalog';
+let currentPreset = 'standard';
+
+function renderCreateInto(id, override) {
+  currentPreset = id;
+  step = 'create';
+  syncSteps();
+  byId('app').querySelector('.layer')?.remove();
+  const host = byId('app');
+  host.insertAdjacentHTML('beforeend', renderCreate(id, override));
+  renderNote();
+}
+
+function redraw() {
+  byId('app').querySelector('.layer')?.remove();
+  const host = byId('app');
+  if (step === 'catalog') host.insertAdjacentHTML('beforeend', renderCatalog());
+  else if (step === 'create') host.insertAdjacentHTML('beforeend', renderCreate(currentPreset));
+  else if (step === 'review') host.insertAdjacentHTML('beforeend', renderReview());
+  renderNote();
+  if (step === 'board') syncCancelCol();
+}
+
+/* 取消列：默认折叠，点一下展开成真正的第 6 列 */
+let cancelExpanded = false;
+const CANCEL_CARDS = [
+  { title: '#41 旧的分页实现', meta: '<span class="chip">已取消</span><span class="chip">#41</span>' },
+  { title: '#37 同步失败重试', meta: '<span class="chip">已取消</span><span class="chip">#37</span>' }
+];
+function cancelColHTML(expanded) {
+  const head = expanded
+    ? '<div class="colhead"><i class="dot canceled"></i>取消 <span class="count">2</span></div>'
+    : '<div class="colhead" title="取消（点击展开 / 收起）"><i class="dot canceled"></i>取消 <span class="count">2</span></div>';
+  return head + (expanded
+    ? CANCEL_CARDS.map(c => `<div class="kcard"><div class="ktitle">${c.title}</div><div class="kmeta">${c.meta}</div></div>`).join('')
+    : '');
+}
+function syncCancelCol() {
+  const col = byId('col-cancel');
+  if (!col) return;
+  col.classList.toggle('collapsed', !cancelExpanded);
+  col.dataset.collapsed = String(!cancelExpanded);
+  col.innerHTML = cancelColHTML(cancelExpanded);
+}
+function toggleCancel() {
+  cancelExpanded = !cancelExpanded;
+  syncCancelCol();
+}
+
+function openReviewPreview() {
+  const p = byId('preview');
+  if (!p) return;
+  p.innerHTML = reviewPreviewHTML();
+  p.classList.remove('flash');
+  void p.offsetWidth;
+  p.classList.add('flash');
+}
+
+function syncSteps() {
+  document.querySelectorAll('.steps button').forEach(b => {
+    b.setAttribute('aria-current', String(b.dataset.step === step));
+  });
+}
+
+/* ── 说明块（稿子的一部分，不是产品 UI） ────────────────────── */
+function renderNote() {
+  const host = byId('note');
+  if (step === 'catalog') {
+    host.innerHTML = `
+      <b>① 员工目录</b> —— 五个 preset，四种状态：已绑定启用、已绑定停用（auditor）、未分配（Code Auditor v2 / Spike Runner）、失效（Legacy Review）。
+      <ul>
+        <li>角色与权限<b>直接摊在卡片上改</b>；点角色 chip 在「执行 / 评审」之间切换，★ 是默认评审员工，全表只有一个。</li>
+        <li>「未分配」只有一个<b>下拉</b>（选择角色后才参与建卡预填），不会默认被当成执行。</li>
+        <li>每张卡多了一行<b>会话</b>：最近一次执行会话，点了就跳 —— 任务 ↔ 会话 ↔ 员工在这里串起来。</li>
+        <li>失效绑定保留在表里，只标「预设不可用」，可解除，不会静默消失。</li>
+        <li><b>看板列已按 GitHub Project 的 Status 对齐</b>：待澄清 / 就绪 / 执行中 / 待你验收 / 完成 / 取消（取消列默认折叠，点开就是完整 6 列）。</li>
+        <li><b>已定：</b>评审角色没显式配权限时，建卡用「看板默认」；评审卡本身仍然恒为只读。</li>
+      </ul>`;
+  } else if (step === 'create') {
+    host.innerHTML = `
+      <b>② 建卡表单</b> —— 从目录点「使用」进来的样子。换 preset 会带动角色与权限。
+      <ul>
+        <li>新增「<b>执行方式</b>」：新建会话 / 复用最近执行会话 —— 这张卡挂在哪个会话上，建卡时就定了。</li>
+        <li>权限下拉里选中具体值时，下方出现「这张卡与绑定不一致，仅影响本卡」；保持「跟随…」时写明实际生效值与来源。</li>
+        <li>agent 的 <code>taskboard_create</code> 走同一套解析，所以人建卡和 agent 建卡不会分叉。</li>
+      </ul>`;
+  } else if (step === 'review') {
+    host.innerHTML = `
+      <b>③ 发起评审</b> —— 评审卡绑定到具体评审员工，而不再是「部署默认的某个 preset」。
+      <ul>
+        <li>「Reviewer」来自员工目录里 ★ 标记的那位；没有启用的评审员工时回落到部署默认，且不阻塞创建。</li>
+        <li>「执行权限」恒为只读并标「锁定」—— 绑定里的权限改不动它。</li>
+        <li>「评审会话」在执行时新建，与源任务的会话各是一个，可分别跳转。</li>
+        <li>门禁判定（评审未完成不能 done）本次完全不改。</li>
+      </ul>`;
+  } else {
+    host.innerHTML = `
+      <b>④ 看板列</b> —— 列名与数量都对齐 Project #1 的 Status 选项，不再是「待规划 / 待办 / 进行中…」另一套叫法。
+      <table style="border-collapse:collapse;margin:6px 0 0;font-size:11.5px">
+        <tr>
+          <th style="text-align:left;padding:2px 12px 2px 0;font-weight:600">看板列</th>
+          <th style="text-align:left;padding:2px 12px 2px 0;font-weight:600">内部状态</th>
+          <th style="text-align:left;padding:2px 0;font-weight:600">Project Status 选项</th>
+        </tr>
+        <tr><td>待澄清</td><td><code>backlog</code></td><td>待澄清</td></tr>
+        <tr><td>就绪</td><td><code>todo</code></td><td>就绪</td></tr>
+        <tr><td>执行中</td><td><code>in_progress</code></td><td>执行中</td></tr>
+        <tr><td>待你验收</td><td><code>in_review</code></td><td>待你验收</td></tr>
+        <tr><td>完成</td><td><code>done</code></td><td>完成</td></tr>
+        <tr><td>取消（默认折叠）</td><td><code>canceled</code></td><td>取消</td></tr>
+      </table>
+      <ul style="margin-top:6px">
+        <li><b>点卡片上的会话 chip</b> 弹出该卡的全部执行会话（续跑、定时轮次都在列表里，可逐条跳转）；单击卡片仍是选中，双击仍直达最近会话。</li>
+        <li>取消列默认折叠，点列头展开 —— 与「已完成列折叠」同一套交互，不新造控件。</li>
+        <li>归档、回收站仍在「其他」入口：它们不是 Project 的 Status，不进列。</li>
+        <li>内部状态值不变，只改列集合与文案；P2 的回写映射不受影响，已有卡片不需要迁移。</li>
+      </ul>`;
+  }
+}
+
+function byId(id) { return document.getElementById(id); }
+
+document.querySelectorAll('.steps button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    step = btn.dataset.step;
+    syncSteps();
+    redraw();
+  });
+});
+document.querySelectorAll('[data-open="catalog"]').forEach(btn => {
+  btn.addEventListener('click', () => { step = 'catalog'; syncSteps(); redraw(); });
+});
+
+/* 首屏 */
+step = 'catalog';
+syncSteps();
+redraw();
+</script>
+</body>
+</html>
