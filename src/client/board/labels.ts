@@ -39,6 +39,23 @@ export const COLUMN_COLLAPSE_KEYS: Readonly<Partial<Record<TaskStatus, string>>>
   canceled: 'board.column.collapseCanceled',
 }
 
+/**
+ * The header text for one column.
+ *
+ * A configured GitHub connection carries the project's own Status option
+ * names; those win because switching to another project changes the vocabulary
+ * with it. A column the map does not cover (or an empty name) falls back to
+ * the shipped i18n copy, per column rather than all-or-nothing.
+ */
+export function columnLabel(
+  t: (key: string) => string,
+  status: TaskStatus,
+  statusMap: Partial<Record<TaskStatus, string>> | undefined,
+): string {
+  const mapped = statusMap?.[status]
+  return mapped !== undefined && mapped.length > 0 ? mapped : t(COLUMN_KEYS[status])
+}
+
 /** Expand-bar titles for the main columns. */
 export const COLUMN_EXPAND_KEYS: Readonly<Partial<Record<TaskStatus, string>>> = {
   backlog: 'board.column.expandBacklog',

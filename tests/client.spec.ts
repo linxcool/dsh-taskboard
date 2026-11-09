@@ -2812,7 +2812,7 @@ describe('client half', () => {
     await new Promise(r => setTimeout(r, 20))
 
     // @tc TC-FUNC-006
-    // 待规划列处于展开态时，列头渲染收起按钮 .dsh-atb-colfoldbtn，其 title 为收起「待规划」列，内嵌 svg
+    // 待澄清列处于展开态时，列头渲染收起按钮 .dsh-atb-colfoldbtn，其 title 为收起「待规划」列，内嵌 svg
     const cols = host.querySelectorAll('.dsh-atb-column')
     expect(cols.length).toBeGreaterThan(0)
     const backlogCol = cols[0]!
@@ -2820,11 +2820,11 @@ describe('client half', () => {
     expect(colHead).not.toBeNull()
     const collapseBtn = colHead.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')
     expect(collapseBtn).not.toBeNull()
-    expect(collapseBtn!.getAttribute('title')).toBe('收起「待规划」列')
+    expect(collapseBtn!.getAttribute('title')).toBe('收起「待澄清」列')
     expect(collapseBtn!.querySelector('svg')).not.toBeNull()
 
     // @tc TC-FUNC-007
-    // 点击待规划列头收起按钮，触发 controller.setBacklogCollapsed(true)
+    // 点击待澄清列头收起按钮，触发 controller.setBacklogCollapsed(true)
     collapseBtn!.click()
     await new Promise(r => setTimeout(r, 20))
     expect(controller.getSnapshot().collapsedColumns.includes('backlog')).toBe(true)
@@ -2840,12 +2840,12 @@ describe('client half', () => {
     // 收起态元素完整性：展开按钮、圆点、竖排文字、数量徽章
     const expandBtn = bar.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
     expect(expandBtn).not.toBeNull()
-    expect(expandBtn.getAttribute('title')).toBe('展开「待规划」列')
+    expect(expandBtn.getAttribute('title')).toBe('展开「待澄清」列')
     const dot = bar.querySelector('.dsh-atb-dot[data-status="backlog"]')!
     expect(dot).not.toBeNull()
     const vertText = bar.querySelector('.dsh-atb-col-collapsed-text')!
     expect(vertText).not.toBeNull()
-    expect(vertText.textContent).toBe('待规划')
+    expect(vertText.textContent).toBe('待澄清')
     const countBadge = bar.querySelector('.dsh-atb-colcount')!
     expect(countBadge).not.toBeNull()
     expect(countBadge.textContent).toBe('3')
@@ -2899,7 +2899,7 @@ describe('client half', () => {
     expect(colCollapsed.getAttribute('data-dragover')).toBeNull()
 
     // @tc TC-FUNC-013
-    // 拖拽放置与流转：将 todo 状态的 t-todo 放置到待规划收起条，触发 controller.move
+    // 拖拽放置与流转：将 todo 状态的 t-todo 放置到待澄清收起条，触发 controller.move
     moveCalls = []
     const dropEvt = new Event('drop', { bubbles: true, cancelable: true })
     Object.defineProperty(dropEvt, 'dataTransfer', { value: dt })
@@ -3054,7 +3054,7 @@ describe('client half', () => {
     const todoHead = todoCol.querySelector('.dsh-atb-colhead')!
     const todoCollapseBtn = todoHead.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
     expect(todoCollapseBtn).not.toBeNull()
-    expect(todoCollapseBtn.getAttribute('title')).toBe('收起「待办」列')
+    expect(todoCollapseBtn.getAttribute('title')).toBe('收起「就绪」列')
 
     // 点击收起待办列
     todoCollapseBtn.click()
@@ -3066,12 +3066,12 @@ describe('client half', () => {
     expect(collapsedTodoCol).not.toBeNull()
     const todoBar = collapsedTodoCol.querySelector('.dsh-atb-col-collapsed-bar')!
     expect(todoBar).not.toBeNull()
-    expect(todoBar.querySelector('.dsh-atb-col-collapsed-text')!.textContent).toBe('待办')
+    expect(todoBar.querySelector('.dsh-atb-col-collapsed-text')!.textContent).toBe('就绪')
     expect(todoBar.querySelector('.dsh-atb-colcount')!.textContent).toBe('1')
 
     // 点击展开按钮恢复展开
     const todoExpandBtn = todoBar.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
-    expect(todoExpandBtn.getAttribute('title')).toBe('展开「待办」列')
+    expect(todoExpandBtn.getAttribute('title')).toBe('展开「就绪」列')
     todoExpandBtn.click()
     await new Promise(r => setTimeout(r, 20))
     expect(controller.getSnapshot().collapsedColumns.includes('todo')).toBe(false)

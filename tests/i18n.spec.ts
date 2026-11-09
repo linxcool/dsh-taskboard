@@ -352,38 +352,38 @@ describe('host system message localization', () => {
     expect(en).toHaveProperty('board.column.collapseTodo')
     expect(en).toHaveProperty('board.column.expandTodo')
 
-    expect(zh['board.column.collapseBacklog']).toBe('收起「待规划」列')
-    expect(zh['board.column.expandBacklog']).toBe('展开「待规划」列')
-    expect(en['board.column.collapseBacklog']).toBe('Collapse "Backlog" column')
-    expect(en['board.column.expandBacklog']).toBe('Expand "Backlog" column')
-    expect(zh['board.column.collapseTodo']).toBe('收起「待办」列')
-    expect(zh['board.column.expandTodo']).toBe('展开「待办」列')
-    expect(en['board.column.collapseTodo']).toBe('Collapse "To Do" column')
-    expect(en['board.column.expandTodo']).toBe('Expand "To Do" column')
+    expect(zh['board.column.collapseBacklog']).toBe('收起「待澄清」列')
+    expect(zh['board.column.expandBacklog']).toBe('展开「待澄清」列')
+    expect(en['board.column.collapseBacklog']).toBe('Collapse "Needs clarification" column')
+    expect(en['board.column.expandBacklog']).toBe('Expand "Needs clarification" column')
+    expect(zh['board.column.collapseTodo']).toBe('收起「就绪」列')
+    expect(zh['board.column.expandTodo']).toBe('展开「就绪」列')
+    expect(en['board.column.collapseTodo']).toBe('Collapse "Ready" column')
+    expect(en['board.column.expandTodo']).toBe('Expand "Ready" column')
   })
 
   // @tc TC-FUNC-015
   it('translate dynamically resolves collapseBacklog and expandBacklog based on active locale', () => {
     document.documentElement.lang = 'zh-CN'
     disposeI18n()
-    expect(translate('board.column.collapseBacklog')).toBe('收起「待规划」列')
-    expect(translate('board.column.expandBacklog')).toBe('展开「待规划」列')
-    expect(translate('board.column.collapseTodo')).toBe('收起「待办」列')
-    expect(translate('board.column.expandTodo')).toBe('展开「待办」列')
+    expect(translate('board.column.collapseBacklog')).toBe('收起「待澄清」列')
+    expect(translate('board.column.expandBacklog')).toBe('展开「待澄清」列')
+    expect(translate('board.column.collapseTodo')).toBe('收起「就绪」列')
+    expect(translate('board.column.expandTodo')).toBe('展开「就绪」列')
 
     document.documentElement.lang = 'en-US'
     disposeI18n()
-    expect(translate('board.column.collapseBacklog')).toBe('Collapse "Backlog" column')
-    expect(translate('board.column.expandBacklog')).toBe('Expand "Backlog" column')
-    expect(translate('board.column.collapseTodo')).toBe('Collapse "To Do" column')
-    expect(translate('board.column.expandTodo')).toBe('Expand "To Do" column')
+    expect(translate('board.column.collapseBacklog')).toBe('Collapse "Needs clarification" column')
+    expect(translate('board.column.expandBacklog')).toBe('Expand "Needs clarification" column')
+    expect(translate('board.column.collapseTodo')).toBe('Collapse "Ready" column')
+    expect(translate('board.column.expandTodo')).toBe('Expand "Ready" column')
 
     document.documentElement.lang = 'ru-RU'
     disposeI18n()
-    expect(translate('board.column.collapseBacklog')).toBe('Свернуть колонку «Бэклог»')
-    expect(translate('board.column.expandBacklog')).toBe('Развернуть колонку «Бэклог»')
-    expect(translate('board.column.collapseTodo')).toBe('Свернуть колонку «К выполнению»')
-    expect(translate('board.column.expandTodo')).toBe('Развернуть колонку «К выполнению»')
+    expect(translate('board.column.collapseBacklog')).toBe('Свернуть колонку «Требует уточнения»')
+    expect(translate('board.column.expandBacklog')).toBe('Развернуть колонку «Требует уточнения»')
+    expect(translate('board.column.collapseTodo')).toBe('Свернуть колонку «Готово»')
+    expect(translate('board.column.expandTodo')).toBe('Развернуть колонку «Готово»')
   })
 })
 

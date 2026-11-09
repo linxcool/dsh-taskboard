@@ -9,7 +9,10 @@ import type { BoardController, ControllerState } from '../controller.ts'
 import type { TaskRecord, TaskStatus, Urgency } from '../../shared/protocol.ts'
 import { MAIN_STATUSES, canTransition, completedDisplayLimitOf } from '../../shared/protocol.ts'
 import { PLUGIN_VERSION } from '../../shared/version.ts'
-import { COLUMN_COLLAPSE_KEYS, COLUMN_EXPAND_KEYS, COLUMN_KEYS, URGENCY_KEYS } from './labels.ts'
+import { COLUMN_COLLAPSE_KEYS, COLUMN_EXPAND_KEYS, COLUMN_KEYS, URGENCY_KEYS, columnLabel } from './labels.ts'
+import { githubStatusMapOf } from '../../shared/github-status-map.ts'
+import type { ExternalSyncStatus } from '../../shared/external.ts'
+import { externalRequest } from '../external-api.ts'
 import { useT } from '../i18n/runtime.ts'
 import { localizeBuiltinName, localizeBuiltinTask } from '../i18n/templates.ts'
 import { categoryLabel, groupTemplatesByCategory } from '../template-categories.ts'
@@ -168,6 +171,17 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
     return () => clearInterval(timer)
   }, [])
   const [onlyNeedsHuman, setOnlyNeedsHuman] = useState(false)
+  // Column vocabulary: a configured GitHub connection carries its project's
+  // Status option names; without one the shipped i18n copy is used. Fetched
+  // once per mount — the connection is edited in settings, not per render.
+  const [statusMap, setStatusMap] = useState<Partial<Record<TaskStatus, string>>>()
+  useEffect(() => {
+    let cancelled = false
+    void externalRequest<ExternalSyncStatus>('')
+      .then(status => { if (!cancelled) setStatusMap(githubStatusMapOf(status.config)) })
+      .catch(() => { /* no connection (or route unavailable) → i18n labels */ })
+    return () => { cancelled = true }
+  }, [])
   const allLive = filterTasks(state, state.ledger.tasks.filter(t => t.trashedAt === undefined))
   const needsHumanCount = allLive.filter(task => humanWaiting(task).needs).length
   const live = onlyNeedsHuman ? allLive.filter(task => humanWaiting(task).needs) : allLive
@@ -411,7 +425,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                 const task = state.ledger.tasks.find(t => t.id === id)
                 if (task === undefined || task.status === status) return
                 if (!canTransition(task.status, status)) {
-                  showAlert(t('board.drag.forbidden', { from: t(COLUMN_KEYS[task.status]), to: t(COLUMN_KEYS[status]) }))
+                  showAlert(t('board.drag.forbidden', { from: columnLabel(t, task.status, statusMap), to: columnLabel(t, status, statusMap) }))
                   return
                 }
                 void controller.move(id, task.version, status)
@@ -452,7 +466,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                       </button>
                       <div className="dsh-atb-col-collapsed-title">
                         <span className="dsh-atb-dot" data-status={status} />
-                        <span className="dsh-atb-col-collapsed-text">{t(COLUMN_KEYS[status])}</span>
+                        <span className="dsh-atb-col-collapsed-text">{columnLabel(t, status, statusMap)}</span>
                       </div>
                       <span className="dsh-atb-colcount">{count}</span>
                     </div>
@@ -488,7 +502,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                 >
                   <div className="dsh-atb-colhead">
                     <span className="dsh-atb-dot" data-status={status} />
-                    {t(COLUMN_KEYS[status])}
+                    {columnLabel(t, status, statusMap)}
                     <span className="dsh-atb-colcount">{columnTasks.length}</span>
                     {status === 'in_progress' && (
                       <button
