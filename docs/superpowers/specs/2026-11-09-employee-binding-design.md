@@ -79,7 +79,9 @@ const isReviewer = (preset) => REVIEW_PATTERN.test(`${preset.id} ${preset.name ?
 
 ## 5. 数据模型
 
-绑定表存进台账 `settings`，随 JSON 导出/导入一起搬，不新增数据文件。
+绑定表存进**台账顶层字段**，随 JSON 导出/导入一起搬，不新增数据文件。
+
+> 不放进 `settings` 的原因：`POST /settings/update` 是整对象替换语义（`routes.ts:1521`），设置弹窗保存时会把不认识的字段一起清掉——绑定表放进去，用户改个默认模型就把员工全清了。
 
 ```ts
 type EmployeeRole = 'maker' | 'reviewer'
@@ -94,14 +96,14 @@ interface EmployeeBinding {
 }
 ```
 
-`BoardSettings` 新增（`src/shared/protocol.ts` 约 323 行）：
+`TaskLedger` 新增（`src/shared/protocol.ts` 约 1031 行）：
 
 ```ts
 employees?: EmployeeBinding[]
 employeesMigratedAt?: string   // 一次性迁移标记
 ```
 
-**校验规则**（`asBoardSettings`，约 380 行附近）：
+**校验规则**（`asEmployeeBindings(raw)`，在 `src/shared/protocol.ts`）：
 
 - `employees` 必须是数组，长度 ≤ 200，否则整次设置写入失败。
 - 每条：`presetId` 非空字符串（trim）；`role` ∈ `{maker, reviewer}`；`permission` 若存在必须是三种之一；`enabled` 必须是布尔。
@@ -200,13 +202,14 @@ controller.newFromTemplate({
 | `src/host/tools.ts` 约 628 行 | `permission` 缺省 → 看板默认 | 缺省且给了 `presetId` → 绑定权限；再缺省 → 看板默认 |
 | `src/host/routes.ts` 约 775 行 | 同上 | 同上 |
 | `src/shared/protocol.ts` 约 450 行 | `defaultPermissionOf` | 新增 `employeeBindingFor()` 与 `permissionForCreate()`，表单与工具共用 |
-| `/settings` 路由 | `asBoardSettings` | 自动接受新字段 |
+| `/settings` 路由 | `asBoardSettings` | **不动**；绑定表不进 settings |
+| 新增 `POST /employees` | — | 整表替换 `ledger.employees`，走 `asEmployeeBindings` 校验 |
 
 解析函数放 `src/shared/protocol.ts`，客户端与宿主共用同一实现——这是“人建卡与 agent 建卡不分叉”的保证。
 
 ## 9. 迁移与回滚
 
-- 迁移只写 `settings`，不碰任务数据；写入 `employeesMigratedAt` 后不再推算。
+- 迁移只写台账的 `employees` 与标记字段，不碰任务与设置；写入 `employeesMigratedAt` 后不再推算。
 - 回滚：删除 `employees` 与 `employeesMigratedAt` 即回到“无绑定”状态（旧正则代码已删除，回滚到旧行为需回退提交）。
 - 导入旧备份（无 `employees` 字段）会重新触发一次迁移。
 
