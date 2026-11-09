@@ -76,6 +76,10 @@ const isReviewer = (preset) => REVIEW_PATTERN.test(`${preset.id} ${preset.name ?
 | D15 | 可编辑的是**用户正文**（`effectivePrompt` 渲染 + `{{lastComments}}` 替换），框架行自动注入 | 框架行承载交接协议与门禁，不能让人改掉；正文才是「上下文」 |
 | D16 | 「发送并创建会话」创建**执行会话**：进执行中、写执行记录、带 taskboard 工具 | 与「立即执行」共用同一条启动路径，只多一步预览 |
 | D17 | 编辑内容只影响本次开场消息，不回写任务的 `prompt` 字段 | 预览解决「这一轮怎么说」，不是「改卡」 |
+| D18 | 评审员工的「使用」改为「用它发起评审」：先选源任务，再打开预填表单；无候选时禁用 | 评审员工建普通卡与用户预期相反（走查 ⚠G2） |
+| D19 | 编辑任务换 preset 时，若当前权限等于「原绑定权限或看板默认」，按新绑定重算；否则保留 | 否则绑定对导入卡与存量卡永远失效（走查 ⚠G6） |
+| D20 | 详情页新增「执行员工」下拉，直接改任务 `presetId` | 存量卡与导入卡没有分配入口，只能进编辑表单（走查 ⚠G5） |
+| D21 | 目录页脚常驻「绑定只影响之后新建的任务」；表单「⚡ 立即执行」旁说明它与「开会话」的差别 | 两条启动路径与绑定作用域都要可见（走查 ⚠G3、⚠G4） |
 
 ## 5. 数据模型
 
@@ -124,6 +128,7 @@ employeesMigratedAt?: string   // 一次性迁移标记
 5. **评审卡回落**。没有启用的 reviewer 绑定时，评审卡不传 `presetId`（用部署默认），不阻塞创建。
 6. **迁移只跑一次**。host 侧首次 `GET /model-catalog` 成功后执行：若 `employees` 与 `employeesMigratedAt` 都缺失，把当前命中旧正则的 preset 写成 `role: 'reviewer'`、`enabled: true` 的绑定，再写时间戳；catalog 不可用则跳过且不写标记，下次重试。
 7. **评审门禁不变**。`openReviews` 判定、`review cards still open` 的 400、详情页完成置灰，一行不动。
+8. **换 preset 的重算规则**。编辑任务改 `presetId` 时：若当前 `permission` 等于「原绑定的权限」或「看板默认」（即没有被人显式改过），则按新 preset 的绑定重算；否则保留现有值。这条让绑定对导入卡与存量卡同样生效，同时不覆盖用户显式设置。
 
 ## 7. 界面
 
@@ -142,6 +147,8 @@ employeesMigratedAt?: string   // 一次性迁移标记
 
 - 角色 chip 点击即在 `maker` / `reviewer` 间切换；`★` 标记默认评审员工，互斥。
 - 会话行显示该员工最近一次执行会话，点击跳转；没有会话时显示「还没有执行过」。
+- **评审员工没有「使用这位员工建卡」**：按钮改为「用它发起评审」，点击后先选源任务（`in_progress` / `in_review` 的卡），再打开预填了 `reviewOf` 的表单；没有候选源任务时按钮禁用并提示「先把一张卡移到执行中或待你验收」。
+- 目录页脚常驻提示：「绑定只影响之后新建的任务；已有卡片按各自记录的 preset 与权限执行」。
 - `dispatch` 保持现形状，只换数据来源：
 
 ```ts
@@ -157,6 +164,7 @@ controller.newFromTemplate({
 - 选中 preset 后自动带出角色 chip 与权限初值，用户可改。
 - 权限保持「跟随」时，下方显示「实际生效 + 来源」；选中具体值时显示「这张卡与绑定不一致，仅影响本卡」。
 - 新增「执行方式」：新建会话（默认）/ 复用最近执行会话。
+- 「⚡ 立即执行」旁固定一行说明：「= 不预览，直接用生成的正文发送；想先改正文就用卡片上的『＋ 开会话』」。
 
 ### 7.3 发起评审（`TaskDetail.tsx` 约 857 行）
 
@@ -179,10 +187,12 @@ controller.newFromTemplate({
 - **详情面板**：执行记录保持现状（倒序、会话跳转、Diff、报告），列表的“完整版”。
 - **员工卡**：最近执行会话（7.1 的会话行）。
 - 单击卡片仍是选中 + 详情，双击仍是直达最近会话，本次不改。
+- **评审卡视觉区分**：评审卡左侧加 3px 紫色色条（`data-role="review"`），与普通卡在「就绪」列同列但不混淆。不新增列、不新增存储。
 
 ### 7.5 无会话时：开会话
 
 - **位置**：会话 chip 的位置显示虚线 `＋ 开会话`。有会话时该位置是会话 chip，两者不并存。
+- **空态文案**：弹层顶部固定一句「发送后这张卡会进入执行中，会话可随时从卡片跳转」，让「就绪但没有会话」的卡有明确下一步（走查 ⚠G1）。
 - **弹层三层**：① 用谁跑（绑定的 preset / 权限 / 分支）；② 用户正文（可编辑）；③ 两个出口。
 - **正文来源**：`effectivePrompt(task)` 的渲染结果 —— `标题\n\n描述\n\nPrompt`，并把 `{{lastExecution}}` / `{{lastComments}}` 替换成实际内容。即 `execution.ts` 里的 `userBody()`；把该函数抽到 `shared/` 供预览与启动共用。
 - **框架行不进编辑区**：任务 ID、已置进行中、交接协议、验收清单、分支隔离由插件照常注入。人改得动“这一轮要做什么”，改不动“交接规则”。
@@ -190,10 +200,18 @@ controller.newFromTemplate({
 - **只复制**：只把正文写入剪贴板，不建会话、不改状态。
 - **与「立即执行」的关系**：同一实现 `startExecution(taskId, { openingBody? })`。立即执行不传 `openingBody`，用生成的正文；开会话传编辑后的正文。
 
-### 7.6 文案
+### 7.6 执行员工（详情页）
+
+存量卡与导入卡（链路 C）没有分配入口，只能在编辑表单里改 preset，链路太长。详情页新增一行：
+
+- 显示「执行员工：<员工名 / 未分配>」，点击展开下拉，选项来自绑定表与 preset catalog（未分配的 preset 也可选，选后提示「这个 preset 还没有角色」）。
+- 选中后立即 `PATCH /tasks/:id` 写入 `presetId`，并按 §6 规则 8 处理权限。
+- 卡片上同步显示员工 chip（`maker` / `reviewer` 两色），与评审 chip 区分。
+
+### 7.7 文案
 
 `zh.ts` / `en.ts` / `ru.ts` 三份同步。已有 `employees.roleMaker`、`employees.roleReviewer`；新增：
-`employees.unassigned`、`employees.stale`、`employees.assign`、`employees.setDefaultReviewer`、`employees.disabled`、`employees.migratedHint`、`detail.review.employee`、`detail.sessions.title`、`detail.sessions.footer`、`form.execution.newSession`、`form.execution.reuseSession`、`card.sessions.open`、`compose.title`、`compose.framingNote`、`compose.send`、`compose.copy`、`compose.sent`。
+`employees.unassigned`、`employees.stale`、`employees.assign`、`employees.setDefaultReviewer`、`employees.disabled`、`employees.migratedHint`、`detail.review.employee`、`detail.sessions.title`、`detail.sessions.footer`、`form.execution.newSession`、`form.execution.reuseSession`、`card.sessions.open`、`compose.title`、`compose.framingNote`、`compose.send`、`compose.copy`、`compose.sent`、`compose.emptyHint`、`employees.reviewAction`、`employees.noSourceTask`、`employees.scopeHint`、`form.runNowHint`、`detail.employee.label`、`detail.employee.unassigned`、`card.role.review`。
 
 ## 8. 宿主侧规则
 
@@ -235,6 +253,10 @@ controller.newFromTemplate({
 | T16 | 点「发送并创建会话」→ 任务进 `in_progress`、写一条带 `sessionId` 的执行记录、卡片出现会话 chip |
 | T17 | 编辑正文后发送，本轮开场消息用编辑后的文本；任务的 `prompt` 字段未被修改 |
 | T18 | 点「只复制」不创建会话、不改状态 |
+| T19 | 评审员工的按钮是「用它发起评审」；无 in_progress/in_review 候选时禁用 |
+| T20 | 换 preset：权限等于旧绑定/看板默认时按新绑定重算；被人显式改过则保留 |
+| T21 | 详情页「执行员工」下拉改 preset 立即写库，并按 T20 规则处理权限 |
+| T22 | 评审卡渲染带 `data-role="review"`，普通卡没有 |
 
 回归：`npm test` 全量通过；未配置绑定时原有看板行为不变。
 

@@ -193,11 +193,11 @@ git commit -m "feat(host): employee binding table endpoint"
 
 ---
 
-### Task 3: 建卡权限统一走 `permissionForCreate`
+### Task 3: 建卡与改卡的权限解析
 
 **Files:**
 - Modify: `src/host/tools.ts:628`
-- Modify: `src/host/routes.ts:775`
+- Modify: `src/host/routes.ts:775`（建卡）与 update 分支（`PATCH /tasks/:id`）
 - Test: `tests/tools.spec.ts`（追加）、`tests/routes.spec.ts`（追加）
 
 **Interfaces:**
@@ -216,25 +216,40 @@ it('explicit permission still wins', async () => {
 })
 ```
 
+```ts
+// routes.spec.ts
+it('changing the preset recomputes an untouched permission', async () => {
+  // 任务 permission = 看板默认 'workspace-write'，改 preset 为一条 permission: 'read-only' 的绑定
+  // → 返回的任务 permission === 'read-only'
+})
+it('changing the preset keeps an explicitly chosen permission', async () => {
+  // 任务 permission = 'danger-full-access'（既非旧绑定也非看板默认），改 preset → 仍是 danger-full-access
+})
+```
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node node_modules/vitest/vitest.mjs run tests/tools.spec.ts -t "binding permission"`
 Expected: FAIL — 仍取看板默认（`workspace-write`）。
 
-- [ ] **Step 3: Replace both call sites**
+- [ ] **Step 3: Replace the create call sites**
 
 `args.permission === undefined ? permissionForCreate(store.snapshot(), presetId, undefined) : asPermission(args.permission)`；`routes.ts` 的建卡分支同样改。`presetId` 在两处都已在作用域内。
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 4: Implement the preset-change recompute in the update route**
+
+仅当请求里带了 `presetId` 且与旧值不同、且请求未显式带 `permission` 时：令 `old` 为旧 preset 的绑定权限（没有则看板默认），若 `task.permission ?? 看板默认` 等于 `old`，则用 `permissionForCreate(ledger, nextPresetId)` 覆盖；否则保留。规则写在 spec §6 规则 8。
+
+- [ ] **Step 5: Run tests**
 
 Run: `node node_modules/vitest/vitest.mjs run tests/tools.spec.ts tests/routes.spec.ts`
 Expected: PASS。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/host/tools.ts src/host/routes.ts tests/tools.spec.ts tests/routes.spec.ts
-git commit -m "feat(host): new-task permission resolves through employee bindings"
+git commit -m "feat(host): task permission resolves through employee bindings on create and preset change"
 ```
 
 ---
@@ -374,6 +389,13 @@ it('dispatch uses the binding permission, not the preset name', async () => {
 })
 it('disables use on a disabled employee', () => { /* button[disabled] */ })
 it('assigns a role through the dropdown', () => { /* 选 role → saveBindings 收到新行 */ })
+it('offers review instead of create for a reviewer employee', () => {
+  // maker 员工：「使用这位员工建卡」；reviewer 员工：「用它发起评审」
+})
+it('disables the review action when nothing is in flight', () => {
+  // 台账里没有 in_progress / in_review 卡 → 按钮 disabled + 提示 employees.noSourceTask
+})
+it('shows the binding scope hint in the footer', () => { /* employees.scopeHint 可见 */ })
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -387,11 +409,13 @@ Expected: FAIL — 仍按正则渲染两态。
 - 用 `state.ledger.employees` 与 preset catalog 求交，得到四态；失效态来自「绑定存在但 catalog 里没有」。
 - 角色 chip 点击切换；权限下拉写回 `saveBindings`；`★` 互斥；停用时「使用」`disabled`。
 - 每条绑定加「会话」行：从 `state.ledger.tasks` 的所有 `executions` 里筛 `presetId` 匹配、取最近一条的 `sessionId`。
+- 角色为 `reviewer` 的卡片按钮改为「用它发起评审」：点击弹出一个源任务选择器（`in_progress` / `in_review` 的卡，按项目过滤），选中后 `newFromTemplate({ presetId, permission: 'read-only', reviewOf })`；没有候选时按钮 `disabled` 并显示 `employees.noSourceTask`。
+- 页脚常驻 `employees.scopeHint`。
 - `dispatch` 用 `permissionForCreate(state.ledger, preset.id)` 取权限。
 
 - [ ] **Step 4: Add the i18n keys**
 
-`employees.unassigned`、`employees.stale`、`employees.assign`、`employees.setDefaultReviewer`、`employees.disabled`、`employees.migratedHint`、三语同步。
+`employees.unassigned`、`employees.stale`、`employees.assign`、`employees.setDefaultReviewer`、`employees.disabled`、`employees.migratedHint`、`employees.reviewAction`、`employees.noSourceTask`、`employees.scopeHint`，三语同步。
 
 - [ ] **Step 5: Run tests**
 
@@ -407,48 +431,60 @@ git commit -m "feat(employees): explicit role and permission editing on the empl
 
 ---
 
-### Task 7: 建卡表单联动
+### Task 7: 建卡表单联动 + 详情页「执行员工」
 
 **Files:**
-- Modify: `src/client/board/TaskFormModal.tsx`（约 251 行的权限初值、preset 选择处）
+- Modify: `src/client/board/TaskFormModal.tsx`（约 251 行的权限初值、preset 选择处、立即执行旁说明）
+- Modify: `src/client/board/TaskDetail.tsx`（新增执行员工下拉）
 - Modify: `src/client/i18n/*.ts`
-- Test: `tests/employee-binding-form.spec.tsx`
+- Test: `tests/employee-binding-form.spec.tsx`、`tests/detail-employee.spec.tsx`
 
 **Interfaces:**
-- Consumes: `permissionForCreate`、`employeeBindingFor`
+- Consumes: `permissionForCreate`、`employeeBindingFor`（Task 1）、`controller.update`（既有）
 
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
+// employee-binding-form.spec.tsx
 it('prefills role and permission from the binding', () => { /* preset=std → 权限初值来自绑定 */ })
 it('shows the resolved source and an override note', () => {
   // 保持「跟随」→ 出现「来自员工绑定」；改成 read-only → 出现「仅影响本卡」
 })
 it('offers new versus reuse for the execution session', () => { /* 执行方式两个选项 */ })
+it('explains what 立即执行 skips', () => { /* form.runNowHint 可见 */ })
+
+// detail-employee.spec.tsx
+it('changes the executing employee from the detail pane', () => {
+  // 选另一个 preset → controller.update 收到 presetId；权限按规则重算（由宿主保证）
+})
+it('marks an unbound preset in the picker', () => { /* 「未分配」标记 */ })
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node node_modules/vitest/vitest.mjs run tests/employee-binding-form.spec.tsx`
-Expected: FAIL — 无角色 chip、无来源行。
+Run: `node node_modules/vitest/vitest.mjs run tests/employee-binding-form.spec.tsx tests/detail-employee.spec.tsx`
+Expected: FAIL — 无角色 chip、无来源行、无执行员工下拉。
 
 - [ ] **Step 3: Implement**
 
 - preset 选择变化时重算权限初值与角色 chip。
 - 权限下拉保持 `''`（跟随）时展示「实际生效 + 来源」；选具体值时展示覆盖提示。
 - 新增「执行方式」下拉：新建会话（默认）/ 复用最近执行会话（列出 `reuseSessionId` 候选，复用现有后端字段）。
-- 新增 i18n：`form.permission.source`、`form.permission.override`、`form.execution.newSession`、`form.execution.reuseSession`。
+- 「⚡ 立即执行」旁渲染 `form.runNowHint`（说明它跳过正文预览）。
+- 详情页新增「执行员工」下拉：选项 = 绑定表 ∪ preset catalog（未绑定的标 `detail.employee.unassigned`）；选中调 `controller.update(task.id, task.version, { presetId })`。
+- 卡片上加员工 chip（maker / reviewer 两色）。
+- 新增 i18n：`form.permission.source`、`form.permission.override`、`form.execution.newSession`、`form.execution.reuseSession`、`form.runNowHint`、`detail.employee.label`、`detail.employee.unassigned`。
 
 - [ ] **Step 4: Run tests**
 
-Run: `node node_modules/vitest/vitest.mjs run tests/employee-binding-form.spec.tsx tests/i18n.spec.ts`
+Run: `node node_modules/vitest/vitest.mjs run tests/employee-binding-form.spec.tsx tests/detail-employee.spec.tsx tests/i18n.spec.ts`
 Expected: PASS。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/client/board/TaskFormModal.tsx src/client/i18n tests/employee-binding-form.spec.tsx
-git commit -m "feat(board): create form derives role and permission from employee bindings"
+git add src/client/board/TaskFormModal.tsx src/client/board/TaskDetail.tsx src/client/i18n tests/employee-binding-form.spec.tsx tests/detail-employee.spec.tsx
+git commit -m "feat(board): create form and detail pane derive role and permission from bindings"
 ```
 
 ---
@@ -481,6 +517,7 @@ it('composes the opening body and sends it', () => {
   // 点开会话 → textarea 值 === client.openingBody 返回值 → 点发送 → run 收到 { openingBody: 编辑后文本 }
 })
 it('copies without starting anything', () => { /* 只复制 → run 未被调用 */ })
+it('explains what sending does in the empty compose state', () => { /* compose.emptyHint 可见 */ })
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -505,7 +542,7 @@ Expected: FAIL — 组件与 `sessionsOf` 不存在。
 
 - [ ] **Step 6: Add i18n keys**
 
-`card.sessions.open`、`detail.sessions.title`、`detail.sessions.footer`、`compose.title`、`compose.framingNote`、`compose.send`、`compose.copy`、`compose.sent`，三语同步。
+`card.sessions.open`、`detail.sessions.title`、`detail.sessions.footer`、`compose.title`、`compose.framingNote`、`compose.send`、`compose.copy`、`compose.sent`、`compose.emptyHint`，三语同步。
 
 - [ ] **Step 7: Run tests**
 
@@ -540,6 +577,9 @@ it('passes the reviewer preset when a reviewer binding exists', () => {
 it('omits the preset when there is no reviewer binding', () => {
   // 无 reviewer 绑定 → presetId undefined，permission 仍是 'read-only'
 })
+it('marks review cards so they stand out in a shared column', () => {
+  // 渲染带 reviewOf 的卡 → data-role="review"；普通卡没有
+})
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -550,6 +590,8 @@ Expected: FAIL — 不带 `presetId`。
 - [ ] **Step 3: Implement**
 
 `const reviewer = defaultReviewerBinding(state.ledger)`；`newFromTemplate({ …, permission: 'read-only', ...(reviewer !== undefined ? { presetId: reviewer.presetId } : {}), reviewOf: task.id })`。评审卡详情在 `reviewOf` chip 旁显示 Reviewer 员工名（`detail.review.employee`，三语）。
+
+评审卡视觉区分：`TaskCard` 在 `task.reviewOf !== undefined` 时加 `data-role="review"`，样式为 3px 紫色左边条；不新增列、不新增存储。
 
 - [ ] **Step 4: Run tests**
 

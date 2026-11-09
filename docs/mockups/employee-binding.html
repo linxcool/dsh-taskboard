@@ -108,6 +108,7 @@
     padding: 8px 9px; font-size: 12px; display: flex; flex-direction: column; gap: 5px;
   }
   .kcard .ktitle { font-weight: 600; line-height: 1.4; }
+  .kcard[data-role="review"] { border-left: 3px solid var(--reviewer); }
   .kcard .kmeta { display: flex; gap: 5px; flex-wrap: wrap; }
   .chip {
     display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1.5;
@@ -303,7 +304,7 @@
             <div class="ktitle">issue #49 登录超时</div>
             <div class="kmeta"><span class="chip warn">紧急</span><span class="chip maker">执行 · standard</span><span class="chip sess" onclick="openSessions(event, 't-49')">🤖 3f2a ↗</span></div>
           </div>
-          <div class="kcard">
+          <div class="kcard" data-role="review">
             <div class="ktitle">评审：登录超时修复</div>
             <div class="kmeta"><span class="chip reviewer">🧪 评审 · reviewer</span></div>
           </div>
@@ -581,7 +582,9 @@ function employeeCard(b) {
       <button class="btn ghost" onclick="unbind('${b.presetId}')">解除绑定</button>
     </div>
     <div class="eactions">
-      <button class="btn primary" ${disabled ? 'disabled title="已停用，先启用才能用它建卡"' : ''} onclick="useEmployee('${b.presetId}')">使用这位员工建卡</button>
+      ${b.role === 'reviewer'
+        ? `<button class="btn primary" ${disabled ? 'disabled' : ''} onclick="useReviewer('${b.presetId}')">用它发起评审</button>`
+        : `<button class="btn primary" ${disabled ? 'disabled title="已停用，先启用才能用它建卡"' : ''} onclick="useEmployee('${b.presetId}')">使用这位员工建卡</button>`}
     </div>
   </article>`;
 }
@@ -649,14 +652,17 @@ function renderCatalog() {
 }
 
 /* ── 渲染：建卡表单 ─────────────────────────────────────────── */
-function renderCreate(selectedId, override) {
+function renderCreate(selectedId, override, reviewOf) {
   const b = bindingOf(selectedId);
   const role = b ? b.role : null;
   const explicit = override || '';
-  const perm = defaultPermissionFor(selectedId, explicit);
-  const permSource = explicit
-    ? '本卡显式选择（覆盖绑定）'
-    : (b && b.permission ? '来自员工绑定' : '来自看板默认');
+  const reviewCard = reviewOf !== undefined && reviewOf !== null && reviewOf !== '';
+  const perm = reviewCard ? 'read-only' : defaultPermissionFor(selectedId, explicit);
+  const permSource = reviewCard
+    ? '评审卡固定只读（不受员工绑定影响）'
+    : explicit
+      ? '本卡显式选择（覆盖绑定）'
+      : (b && b.permission ? '来自员工绑定' : '来自看板默认');
   return `
   <div class="layer on" id="layer">
     <div class="modal" role="dialog">
@@ -683,12 +689,14 @@ function renderCreate(selectedId, override) {
             </div>
             <div class="field">
               <label>执行权限</label>
-              <select onchange="renderCreateInto('${selectedId}', this.value)">
+              ${reviewCard
+                ? '<div class="val"><span class="chip lock" title="评审卡只读是硬约束">🔒 仅可查看（锁定）</span></div>'
+                : `<select onchange="renderCreateInto('${selectedId}', this.value, currentReviewOf)">
                 <option value="" ${explicit === '' ? 'selected' : ''}>跟随员工绑定 / 看板默认</option>
                 <option value="read-only" ${explicit === 'read-only' ? 'selected' : ''}>🔒 仅可查看</option>
                 <option value="workspace-write" ${explicit === 'workspace-write' ? 'selected' : ''}>📁 可写入工作区</option>
                 <option value="danger-full-access" ${explicit === 'danger-full-access' ? 'selected' : ''}>⚡ 完全权限</option>
-              </select>
+              </select>`}
             </div>
             <div class="field">
               <label>执行方式</label>
@@ -697,26 +705,30 @@ function renderCreate(selectedId, override) {
                 <option>复用最近执行会话（3f2a）</option>
               </select>
             </div>
+            ${reviewOf ? `<div class="field"><label>评审对象</label><div class="val"><span class="chip reviewer">🧪 ${reviewOf}</span></div></div>` : ''}
             <div class="derived">
               <span>实际生效：<b>${PERM_LABEL[perm] ?? perm}</b></span>
               <span>来源：${permSource}</span>
-              ${explicit ? '<span class="override-note">这张卡与绑定不一致，仅影响本卡。</span>' : ''}
+              ${explicit && !reviewCard ? '<span class="override-note">这张卡与绑定不一致，仅影响本卡。</span>' : ''}
+              ${reviewCard ? '<span class="empty-note">评审卡不参与权限优先级：只读是硬约束。</span>' : ''}
             </div>
           </div>
           <div>
             <div class="field">
               <label>标题</label>
-              <input type="text" value="修复 #49 会话超时">
+              <input type="text" value="${reviewCard ? `评审：${reviewOf}` : '修复 #49 会话超时'}">
             </div>
             <div class="field">
               <label>描述 / Prompt</label>
-              <div class="textarea">issue #49：token 过期后没有触发刷新，页面停在加载态。复现步骤……</div>
+              <div class="textarea">${reviewCard
+                ? `评审任务：${reviewOf}\n\n通过标准：按验收标准逐条 PASS/FAIL，写明证据与未解决风险。\n评审卡完成前，源任务不能标记完成。`
+                : 'issue #49：token 过期后没有触发刷新，页面停在加载态。复现步骤……'}</div>
             </div>
           </div>
         </div>
       </div>
       <div class="mfoot">
-        <span class="hint">优先级：本卡显式 &gt; 员工绑定 &gt; 看板默认（${PERM_LABEL[boardDefault]}）</span>
+        <span class="hint">${reviewCard ? '评审卡：权限固定只读，不参与优先级' : `优先级：本卡显式 &gt; 员工绑定 &gt; 看板默认（${PERM_LABEL[boardDefault]}）`}</span>
         <span class="spacer"></span>
         <button class="btn" onclick="closeLayer()">取消</button>
         <button class="btn primary">创建任务</button>
@@ -821,22 +833,36 @@ function closeLayer() { byId('layer').classList.remove('on'); }
 /* ── 场景切换 ───────────────────────────────────────────────── */
 let step = 'catalog';
 let currentPreset = 'standard';
+let currentReviewOf;
 
-function renderCreateInto(id, override) {
+function renderCreateInto(id, override, reviewOf) {
   currentPreset = id;
+  currentReviewOf = reviewOf;
   step = 'create';
   syncSteps();
   byId('app').querySelector('.layer')?.remove();
   const host = byId('app');
-  host.insertAdjacentHTML('beforeend', renderCreate(id, override));
+  host.insertAdjacentHTML('beforeend', renderCreate(id, override, reviewOf));
   renderNote();
+}
+
+/* 评审员工：先挑源任务，再打开预填 reviewOf 的表单 */
+const REVIEW_CANDIDATES = [
+  { id: 't-52', title: '修复 #49 会话超时' },
+  { id: 't-48', title: '#48 分页拉取过滤 PR' }
+];
+function useReviewer(presetId) {
+  const src = REVIEW_CANDIDATES[0];
+  if (!src) { showToast('没有处于执行中或待你验收的任务'); return }
+  renderCreateInto(presetId, 'read-only', src.title);
+  showToast(`已选源任务「${src.title}」`);
 }
 
 function redraw() {
   byId('app').querySelector('.layer')?.remove();
   const host = byId('app');
   if (step === 'catalog') host.insertAdjacentHTML('beforeend', renderCatalog());
-  else if (step === 'create') host.insertAdjacentHTML('beforeend', renderCreate(currentPreset));
+  else if (step === 'create') host.insertAdjacentHTML('beforeend', renderCreate(currentPreset, undefined, currentReviewOf));
   else if (step === 'review') host.insertAdjacentHTML('beforeend', renderReview());
   renderNote();
   if (step === 'board') syncCancelCol();
