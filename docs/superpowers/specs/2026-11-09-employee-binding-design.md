@@ -32,6 +32,7 @@ const isReviewer = (preset) => REVIEW_PATTERN.test(`${preset.id} ${preset.name ?
 - 建卡（GUI 与 agent 工具）从同一张表取默认值，行为一致。
 - 评审卡绑定到具体的评审员工。
 - 任务的执行会话可一眼看全：卡片上有会话 chip，点开是这张卡的全部会话。
+- 没有会话的卡片能直接开一个执行会话，开场正文可预览、可改。
 - 旧正则推断结果以一次性迁移保留。
 
 **非目标**
@@ -71,6 +72,10 @@ const isReviewer = (preset) => REVIEW_PATTERN.test(`${preset.id} ${preset.name ?
 | D11 | 会话列表**按会话聚合**，同会话多轮合并并标轮次 | 续跑复用同一会话；按执行记录列会重复 |
 | D12 | 旧正则结果一次性迁移成 reviewer 绑定 | 不静默推断，也不让老用户角色凭空消失 |
 | D13 | 失效绑定保留并标「不可用」 | 与外部同步「查不到标不可用」一致 |
+| D14 | 没有会话的卡片在同一位置显示「＋ 开会话」 | 「把这张卡交给一个会话」在缺会话时才最需要入口 |
+| D15 | 可编辑的是**用户正文**（`effectivePrompt` 渲染 + `{{lastComments}}` 替换），框架行自动注入 | 框架行承载交接协议与门禁，不能让人改掉；正文才是「上下文」 |
+| D16 | 「发送并创建会话」创建**执行会话**：进执行中、写执行记录、带 taskboard 工具 | 与「立即执行」共用同一条启动路径，只多一步预览 |
+| D17 | 编辑内容只影响本次开场消息，不回写任务的 `prompt` 字段 | 预览解决「这一轮怎么说」，不是「改卡」 |
 
 ## 5. 数据模型
 
@@ -173,10 +178,20 @@ controller.newFromTemplate({
 - **员工卡**：最近执行会话（7.1 的会话行）。
 - 单击卡片仍是选中 + 详情，双击仍是直达最近会话，本次不改。
 
-### 7.5 文案
+### 7.5 无会话时：开会话
+
+- **位置**：会话 chip 的位置显示虚线 `＋ 开会话`。有会话时该位置是会话 chip，两者不并存。
+- **弹层三层**：① 用谁跑（绑定的 preset / 权限 / 分支）；② 用户正文（可编辑）；③ 两个出口。
+- **正文来源**：`effectivePrompt(task)` 的渲染结果 —— `标题\n\n描述\n\nPrompt`，并把 `{{lastExecution}}` / `{{lastComments}}` 替换成实际内容。即 `execution.ts` 里的 `userBody()`；把该函数抽到 `shared/` 供预览与启动共用。
+- **框架行不进编辑区**：任务 ID、已置进行中、交接协议、验收清单、分支隔离由插件照常注入。人改得动“这一轮要做什么”，改不动“交接规则”。
+- **发送并创建会话**：走既有执行启动路径，把编辑后的正文作为开场用户消息；任务进入 `in_progress`、写一条执行记录（带 `sessionId`）、卡片立即出现会话 chip。
+- **只复制**：只把正文写入剪贴板，不建会话、不改状态。
+- **与「立即执行」的关系**：同一实现 `startExecution(taskId, { openingBody? })`。立即执行不传 `openingBody`，用生成的正文；开会话传编辑后的正文。
+
+### 7.6 文案
 
 `zh.ts` / `en.ts` / `ru.ts` 三份同步。已有 `employees.roleMaker`、`employees.roleReviewer`；新增：
-`employees.unassigned`、`employees.stale`、`employees.assign`、`employees.setDefaultReviewer`、`employees.disabled`、`employees.migratedHint`、`detail.review.employee`、`detail.sessions.title`、`detail.sessions.footer`、`form.execution.newSession`、`form.execution.reuseSession`。
+`employees.unassigned`、`employees.stale`、`employees.assign`、`employees.setDefaultReviewer`、`employees.disabled`、`employees.migratedHint`、`detail.review.employee`、`detail.sessions.title`、`detail.sessions.footer`、`form.execution.newSession`、`form.execution.reuseSession`、`card.sessions.open`、`compose.title`、`compose.framingNote`、`compose.send`、`compose.copy`、`compose.sent`。
 
 ## 8. 宿主侧规则
 
@@ -212,6 +227,11 @@ controller.newFromTemplate({
 | T11 | 设置校验：非法 role / permission / 超 200 条被拒 |
 | T12 | 会话列表按 `sessionId` 聚合；同会话 3 轮显示为 1 条并标轮次 |
 | T13 | 无会话的任务不显示会话 chip；空列表不弹空白 popover |
+| T14 | 无会话时显示「＋ 开会话」，有会话时不显示 |
+| T15 | 打开开会话弹层，正文等于 `userBody(task)` 的渲染结果；框架行不在正文里 |
+| T16 | 点「发送并创建会话」→ 任务进 `in_progress`、写一条带 `sessionId` 的执行记录、卡片出现会话 chip |
+| T17 | 编辑正文后发送，本轮开场消息用编辑后的文本；任务的 `prompt` 字段未被修改 |
+| T18 | 点「只复制」不创建会话、不改状态 |
 
 回归：`npm test` 全量通过；未配置绑定时原有看板行为不变。
 

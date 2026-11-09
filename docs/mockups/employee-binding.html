@@ -141,6 +141,25 @@
   .popfoot { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 6px; font-size: 11.5px; color: var(--muted); text-align: center; cursor: pointer; }
   .popfoot:hover { color: var(--accent); }
 
+  /* 无会话时的「开会话」入口与上下文编辑 */
+  .chip.sess.ghost { border-style: dashed; background: #fbfcfd; color: #7b8794; font-family: inherit; }
+  .chip.sess.ghost:hover { background: #f2f6fb; color: var(--accent); border-color: #b9cbe3; }
+  .compose-meta { display: flex; gap: 5px; flex-wrap: wrap; margin: 7px 0 6px; }
+  .compose-label { font-size: 11px; color: var(--muted); margin: 6px 0 3px; }
+  .compose-note { font-size: 10.5px; color: var(--faint); background: #f7f8fa; border-radius: 6px; padding: 5px 7px; margin-bottom: 2px; }
+  textarea.compose-text {
+    width: 100%; min-height: 176px; font: 11.5px/1.6 var(--mono); color: var(--text);
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 9px;
+    resize: vertical; background: #fcfcfd;
+  }
+  .popfoot-row { display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 8px; }
+  .popfoot-row .hint { margin-right: auto; font-size: 11px; color: var(--faint); }
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    background: #1f2329; color: #fff; padding: 8px 14px; border-radius: 8px;
+    font-size: 12.5px; z-index: 70; box-shadow: var(--shadow);
+  }
+
   /* ── 弹层 ─────────────────────────────────────────────────── */
   .layer { position: absolute; inset: 0; background: rgba(23, 28, 35, .34); display: none; padding: 22px; overflow: auto; }
   .layer.on { display: block; }
@@ -271,11 +290,11 @@
       </div>
 
       <div class="board">
-        <div class="col">
+        <div class="col" id="col-backlog">
           <div class="colhead"><i class="dot"></i>待澄清 <span class="count">1</span></div>
-          <div class="kcard">
+          <div class="kcard" id="card-t50">
             <div class="ktitle">对齐 GitHub 项目字段</div>
-            <div class="kmeta"><span class="chip">一般</span><span class="chip">dsh-taskboard</span></div>
+            <div class="kmeta"><span class="chip">一般</span><span class="chip">dsh-taskboard</span><span data-slot="session" class="chip sess ghost" onclick="openCompose(event, 't-50')">＋ 开会话</span></div>
           </div>
         </div>
         <div class="col">
@@ -289,7 +308,7 @@
             <div class="kmeta"><span class="chip reviewer">🧪 评审 · reviewer</span></div>
           </div>
         </div>
-        <div class="col">
+        <div class="col" id="col-doing">
           <div class="colhead"><i class="dot doing"></i>执行中 <span class="count">1</span></div>
           <div class="kcard">
             <div class="ktitle">修复 #49 会话超时</div>
@@ -407,6 +426,92 @@ function openSessions(ev, taskId) {
 function closeSessions() {
   byId('sess-pop')?.remove();
   document.removeEventListener('click', closeSessions);
+}
+
+/* 没有会话时，同一位置是「开会话」入口：
+   可编辑的是「用户正文」= effectivePrompt（标题 + 描述 + Prompt + {{lastComments}} 替换）；
+   框架行（任务ID/交接协议/清单/分支）由插件注入，不在这里改。 */
+const TASK_CONTEXT = `对齐 GitHub 项目字段
+
+GitHub Project 的 Status 选项与看板列名对不上（待澄清/就绪/执行中/待你验收/完成/取消
+vs 待规划/待办/进行中/待验收/已完成）。需要把列集合与列名对齐，取消列默认折叠。
+
+按 docs/superpowers/specs/2026-11-09-github-status-columns-design.md 实现六列。
+
+[user]: 先别动 P2 的写回映射`;
+
+function openCompose(ev, taskId) {
+  ev.stopPropagation();
+  closeSessions();
+  closeCompose();
+  const anchor = ev.currentTarget.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'popover';
+  pop.id = 'compose-pop';
+  pop.style.width = '400px';
+  pop.onclick = e => e.stopPropagation();
+  pop.innerHTML = `
+    <div class="pophead">
+      <b>新建关联会话</b><span class="count">这张卡还没有会话</span>
+      <button class="btn ghost" onclick="closeCompose(event)">✕</button>
+    </div>
+    <div class="compose-meta">
+      <span class="chip maker">standard（来自绑定）</span>
+      <span class="chip">📁 可写入工作区</span>
+      <span class="chip">task/field-align</span>
+    </div>
+    <div class="compose-note">框架行（任务 ID、交接协议、验收清单、分支隔离）由插件自动注入，不在这里编辑。</div>
+    <div class="compose-label">用户正文（可编辑，作为首条消息发出）</div>
+    <textarea class="compose-text" id="compose-text">${TASK_CONTEXT}</textarea>
+    <div class="popfoot-row">
+      <span class="hint">发送后创建会话并绑定到这张卡</span>
+      <button class="btn" onclick="copyComposeContext(event)">只复制</button>
+      <button class="btn primary" onclick="sendCompose(event)">发送并创建会话</button>
+    </div>`;
+  document.body.appendChild(pop);
+  const top = Math.min(anchor.bottom + 6, window.innerHeight - pop.offsetHeight - 10);
+  const left = Math.min(Math.max(10, anchor.left - 40), window.innerWidth - pop.offsetWidth - 10);
+  pop.style.top = `${top}px`;
+  pop.style.left = `${left}px`;
+  setTimeout(() => document.addEventListener('click', closeCompose, { once: true }), 0);
+}
+
+function closeCompose() {
+  byId('compose-pop')?.remove();
+  document.removeEventListener('click', closeCompose);
+}
+
+function copyComposeContext(ev) {
+  ev.stopPropagation();
+  const text = byId('compose-text')?.value ?? '';
+  try { void navigator.clipboard?.writeText(text) } catch { /* file:// 下可能不可用，稿子不阻断 */ }
+  showToast('上下文已复制');
+}
+
+function sendCompose(ev) {
+  ev.stopPropagation();
+  TASK_SESSIONS['t-50'] = [{ id: 'a0f3', preset: 'standard', when: '刚刚', state: '运行中', live: true, rounds: 1 }];
+  const card = byId('card-t50');
+  const slot = card?.querySelector('[data-slot="session"]');
+  if (slot) slot.outerHTML = '<span data-slot="session" class="chip sess" onclick="openSessions(event, \'t-50\')">🤖 a0f3 ↗</span>';
+  const doing = byId('col-doing');
+  if (card && doing) doing.appendChild(card);
+  const backlogCount = document.querySelector('#col-backlog .colhead .count');
+  const doingCount = document.querySelector('#col-doing .colhead .count');
+  if (backlogCount) backlogCount.textContent = '0';
+  if (doingCount) doingCount.textContent = '2';
+  closeCompose();
+  showToast('已创建会话 a0f3 并发送上下文，卡片移到「执行中」');
+}
+
+function showToast(text) {
+  byId('toast')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.id = 'toast';
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
 }
 
 const PERM_LABEL = {
@@ -827,6 +932,7 @@ function renderNote() {
       </table>
       <ul style="margin-top:6px">
         <li><b>点卡片上的会话 chip</b> 弹出该卡的全部执行会话（续跑、定时轮次都在列表里，可逐条跳转）；单击卡片仍是选中，双击仍直达最近会话。</li>
+        <li><b>没有会话时，同一位置是「＋ 开会话」</b>：点开先给出<b>用户正文</b>（= 标题 + 描述 + Prompt，含最近评论替换），可编辑；点「发送并创建会话」才真正建<b>执行会话</b>并绑定到卡片，卡片同时进入执行中。框架行（协议 / 清单 / 分支）自动注入，不参与编辑。</li>
         <li>取消列默认折叠，点列头展开 —— 与「已完成列折叠」同一套交互，不新造控件。</li>
         <li>归档、回收站仍在「其他」入口：它们不是 Project 的 Status，不进列。</li>
         <li>内部状态值不变，只改列集合与文案；P2 的回写映射不受影响，已有卡片不需要迁移。</li>
