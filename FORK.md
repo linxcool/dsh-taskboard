@@ -122,6 +122,7 @@ dsh plugin --profile desktop remove dsh-taskboard
 
 - GitHub 同步是**单向导入**；Project Status 回写是可选旁路，不反向拉取 Project 状态变化。
 - Project 字段必须是**单选**类型；不支持 iteration/其他字段类型。
+- 看板列固定 6 个；Project 里未被 `statusMap` 覆盖的 Status 选项（本项目是「技术检查」「待合并」「阻塞」）不参与回写，也不会出现在看板上（「阻塞」在看板里是卡片标记而非列）。
 - 评审关系只在创建时指定，编辑不可修改；agent 工具暂不支持创建评审卡。
 - 员工角色目前用预设名称推断只读/可写，未做显式绑定。
 - 上游兼容性字段仅登记 `0.2.0-rc.2` 与本机 `0.2.1-rc.3`；DSH 升级后需重新构建验证。

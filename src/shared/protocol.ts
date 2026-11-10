@@ -302,6 +302,74 @@ export function asPermission(raw: unknown): PermissionMode {
   throw new Error("permission must be 'workspace-write', 'read-only', or 'danger-full-access'")
 }
 
+// ---------------------------------------------------------------------------
+// employee bindings
+// ---------------------------------------------------------------------------
+
+/** What an employee does on this board. Acceptance is never an employee role. */
+export type EmployeeRole = 'maker' | 'reviewer'
+
+/** Defensive cap on binding rows (guards settings import). */
+export const EMPLOYEE_MAX_BINDINGS = 200
+
+/**
+ * One row of the board's employee table: a DSH preset plus what it is here.
+ * `projectId` is the reserved per-project dimension — today's catalog only
+ * writes the global row (projectId absent), but the key already carries it so
+ * per-project teams need no data migration later.
+ */
+export type EmployeeBinding = {
+  /** DSH preset id — the stable identifier, never the display name. */
+  presetId: string
+  projectId?: string
+  role: EmployeeRole
+  /** Default execution permission for NEW cards; absent → the board default. */
+  permission?: PermissionMode
+  enabled: boolean
+  /** The reviewer a new review card is opened for; at most one row is true. */
+  defaultReviewer?: boolean
+}
+
+const EMPLOYEE_ROLES: readonly EmployeeRole[] = ['maker', 'reviewer']
+
+/** Validate raw input into the employee table (unknown shapes throw). */
+export function asEmployeeBindings(raw: unknown): EmployeeBinding[] {
+  if (!Array.isArray(raw)) throw new Error('employee bindings must be an array')
+  if (raw.length > EMPLOYEE_MAX_BINDINGS) throw new Error(`employee bindings must not exceed ${EMPLOYEE_MAX_BINDINGS} rows`)
+  const byKey = new Map<string, EmployeeBinding>()
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('invalid employee binding')
+    const e = entry as Record<string, unknown>
+    if (typeof e.presetId !== 'string' || e.presetId.trim().length === 0) throw new Error('employee binding needs a presetId')
+    if (typeof e.role !== 'string' || !EMPLOYEE_ROLES.includes(e.role as EmployeeRole)) {
+      throw new Error(`employee role must be one of: ${EMPLOYEE_ROLES.join(', ')}`)
+    }
+    if (typeof e.enabled !== 'boolean') throw new Error('employee binding enabled must be a boolean')
+    if (e.projectId !== undefined && typeof e.projectId !== 'string') throw new Error('employee binding projectId must be a string')
+    if (e.defaultReviewer !== undefined && typeof e.defaultReviewer !== 'boolean') throw new Error('employee binding defaultReviewer must be a boolean')
+    const projectId = typeof e.projectId === 'string' && e.projectId.trim().length > 0 ? e.projectId.trim() : undefined
+    const binding: EmployeeBinding = {
+      presetId: e.presetId.trim(),
+      ...(projectId !== undefined ? { projectId } : {}),
+      role: e.role as EmployeeRole,
+      ...(e.permission !== undefined ? { permission: asPermission(e.permission) } : {}),
+      enabled: e.enabled,
+      ...(e.defaultReviewer === true ? { defaultReviewer: true } : {}),
+    }
+    // Last row wins for the same (project, preset) key — settings writes are
+    // whole-table replacements, so a duplicate can only come from an editor bug.
+    byKey.set(`${projectId ?? '*'}\u0000${binding.presetId}`, binding)
+  }
+  const rows = [...byKey.values()]
+  let starred = false
+  for (const row of rows) {
+    if (row.defaultReviewer !== true) continue
+    if (starred) delete row.defaultReviewer
+    else starred = true
+  }
+  return rows
+}
+
 /**
  * Board-level settings persisted with the ledger (0.5.0). Only fields the
  * user explicitly set are present; absent fields follow factory defaults.
@@ -451,6 +519,36 @@ export function allowClaimFromLinkedRootsOf(settings?: BoardSettings): boolean {
 /** The effective default permission preset for NEW tasks (board setting → factory default 'workspace-write'). */
 export function defaultPermissionOf(settings?: BoardSettings): PermissionMode {
   return settings?.defaultPermission ?? DEFAULT_PERMISSION
+}
+
+/**
+ * The enabled binding for one preset: a project-scoped row wins over the
+ * global one, and disabled rows never resolve.
+ */
+export function employeeBindingFor(ledger: TaskLedger | undefined, presetId: string | undefined, projectId?: string): EmployeeBinding | undefined {
+  if (presetId === undefined || presetId.length === 0) return undefined
+  const rows = (ledger?.employees ?? []).filter(binding => binding.enabled && binding.presetId === presetId)
+  if (rows.length === 0) return undefined
+  return rows.find(binding => binding.projectId !== undefined && binding.projectId === projectId)
+    ?? rows.find(binding => binding.projectId === undefined)
+}
+
+/**
+ * The permission a NEW card starts with (or a preset change recomputes to):
+ * the card's own explicit value, else the employee binding, else the board
+ * default. Shared by the GUI and `taskboard_create` so they cannot diverge.
+ */
+export function permissionForCreate(ledger: TaskLedger | undefined, presetId: string | undefined, explicit?: string): PermissionMode {
+  if (explicit !== undefined && explicit.trim().length > 0) return asPermission(explicit)
+  const binding = employeeBindingFor(ledger, presetId)
+  if (binding?.permission !== undefined) return binding.permission
+  return defaultPermissionOf(ledger?.settings)
+}
+
+/** The reviewer a new review card is opened for: the starred row, else the first enabled reviewer. */
+export function defaultReviewerBinding(ledger: TaskLedger | undefined): EmployeeBinding | undefined {
+  const reviewers = (ledger?.employees ?? []).filter(binding => binding.enabled && binding.role === 'reviewer')
+  return reviewers.find(binding => binding.defaultReviewer === true) ?? reviewers[0]
 }
 
 /** Effective global execution cap (board setting → supplied deployment default). */
@@ -1039,6 +1137,14 @@ export type TaskLedger = {
   tasks: TaskRecord[]
   /** Board-level settings (0.5.0); absent on ledgers never touched by 设置. */
   settings?: BoardSettings
+  /**
+   * Employee table (preset → role/permission). A top-level field on purpose:
+   * `POST /settings/update` replaces the whole settings object, so keeping the
+   * table there would let any settings save wipe every employee.
+   */
+  employees?: EmployeeBinding[]
+  /** Set once the legacy preset-name inference was migrated into `employees`. */
+  employeesMigratedAt?: string
 }
 
 /** Current ledger format version. */
