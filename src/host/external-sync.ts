@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { ExternalItem, ExternalSource, ExternalSyncRecord } from '../shared/external.ts'
 import { externalKey, mergeExternalFields, normalizeExternalSource, normalizeExternalSyncRecords } from '../shared/external.ts'
-import { defaultIsolationOf, defaultPermissionOf, newTaskId, normalizeTitle, type TaskLedger, type TaskRecord, type TaskStatus } from '../shared/protocol.ts'
+import { defaultIsolationOf, defaultPermissionOf, newCommentId, newTaskId, normalizeBody, normalizeTitle, type TaskLedger, type TaskRecord, type TaskStatus } from '../shared/protocol.ts'
 import { parseStatusMap } from '../shared/github-status-map.ts'
 import type { TaskStore } from './store.ts'
 import type { ExternalConfig, ExternalSyncStatus, SyncResult } from '../shared/external.ts'
@@ -13,6 +13,17 @@ export type { ExternalConfig, SyncResult } from '../shared/external.ts'
 export type { ExternalTaskProvider } from './external-provider.ts'
 
 type SyncState = { config?: ExternalConfig }
+
+/**
+ * A root work item that HAS children — an epic.
+ *
+ * Epics are the board's filter dimension, never cards: a root item is what a
+ * tracker user thinks of as the milestone, and the work happens in its
+ * (possibly nested) sub-issues.
+ */
+function isEpicItem(item: ExternalItem): boolean {
+  return (item.childCount ?? 0) > 0 && item.parentNumber === undefined
+}
 
 export function normalizeExternalConfig(raw: unknown, previous?: ExternalConfig): ExternalConfig {
   return normalizeConnection(raw, createBuiltinProviders(), previous)
@@ -208,6 +219,15 @@ export class ExternalSyncService {
     })()
     const statusForItem = (item: ExternalItem): TaskStatus | undefined =>
       item.projectStatus === undefined ? undefined : columnForProjectStatus.get(item.projectStatus)
+    /**
+     * Closing the source archives the card (P1 v2).
+     *
+     * Default is per provider: a closed GitHub issue is the normal "finished"
+     * signal and users expect the card to leave the board, while ZenTao/TAPD
+     * setups rely on the board owning the status. `archiveOnClose=off|on` in the
+     * connection settings overrides either way.
+     */
+    const archiveOnClose = (config.settings.archiveOnClose ?? (config.provider === 'github' ? 'on' : 'off')) !== 'off'
     let committed = false
     try {
       await this.options.store.load()
@@ -237,6 +257,18 @@ export class ExternalSyncService {
         }
       }
       signal.throwIfAborted()
+      // Epics are recorded as filter facets instead of becoming cards.
+      const epics = items
+        .map(entry => entry.item)
+        .filter(item => isEpicItem(item) && Number.isSafeInteger(Number(item.id)))
+        .map(item => ({
+          key: externalKey(config.id, item),
+          repo: item.projectId,
+          number: Number(item.id),
+          title: item.title,
+          children: item.childCount ?? 0,
+          ...(item.projectStatus !== undefined ? { status: item.projectStatus } : {}),
+        }))
       await this.serial(async () => {
         signal.throwIfAborted()
         await this.options.store.mutate('external-sync-updated', ledger => {
@@ -259,7 +291,11 @@ export class ExternalSyncService {
             if (ignored.has(key)) { result.ignored++; continue }
             if (task?.status === 'archived') { result.unchanged++; continue }
             const source: ExternalSource = { connectionId: config.id, provider: config.provider, providerName: this.registry.get(config.provider).descriptor.name, item, syncedAt: result.at, conflicts: [] }
+            // A root item WITH children is an epic: it never becomes a card, it
+            // becomes a filter facet (record.epics below).
+            const epic = isEpicItem(item)
             if (!task) {
+              if (epic) continue
               // "Sync this account's work": an item assigned to someone else is
               // not ours, but an UNASSIGNED item (the norm for GitHub issues) is
               // nobody's yet — dropping it made a repo with no assignees import
@@ -275,6 +311,23 @@ export class ExternalSyncService {
               ledger.tasks.push(created); changed.push(created); byKey.set(key, created); links[key] = created.id; result.created++
             } else {
               links[key] = task.id
+              // Closed source → archived; a card that became an epic → archived
+              // (it is a filter facet now). Never yank a card out from under a
+              // live run: that round is skipped and a later sync archives it.
+              if ((archiveOnClose && item.closed) || epic) {
+                const inFlight = task.claimedBy !== undefined || task.executions.some(execution => execution.outcome === 'running')
+                if (!inFlight) {
+                  const body = item.closed
+                    ? `来源 issue #${item.id} 已关闭，自动归档。`
+                    : `来源 issue #${item.id} 现在是父任务（筛选维度，不再作为卡片），自动归档。`
+                  task.status = 'archived'
+                  task.comments.push({ id: newCommentId(), body: normalizeBody(body), threadId: 'host', version: 1, createdAt: result.at })
+                  task.external = source
+                  task.version++; task.updatedAt = result.at
+                  changed.push(task); result.updated++
+                  continue
+                }
+              }
               const workspaceChanged = config.provider === 'zentao' && task.workspaceId === '' && workspaceId !== ''
               if (workspaceChanged) task.workspaceId = workspaceId
               if (task.status === 'done' || task.status === 'canceled') {
@@ -308,6 +361,8 @@ export class ExternalSyncService {
             }
           }
           record.ignored = [...ignored]; record.links = links; record.lastResult = result
+          if (epics.length > 0) record.epics = epics
+          else delete record.epics
           record.lastAttemptAt = this.lastAttempt; delete record.lastError
           return changed
         })

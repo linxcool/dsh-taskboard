@@ -147,6 +147,8 @@ export const en: TaskboardDict = {
   'board.action.manageTemplates': '⌗ Manage templates…',
   'board.search.placeholder': 'Search title / ID…',
   'board.filter.allProjects': 'All projects',
+  'board.filter.parentAll': 'All epics',
+  'board.filter.parentTitle': 'Filter by epic: show all of its descendants',
   'board.sort.title': 'Sort within columns',
   'board.sort.default': 'Default order',
   'board.sort.updated': 'Recently updated',

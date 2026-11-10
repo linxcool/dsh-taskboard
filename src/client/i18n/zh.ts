@@ -149,6 +149,8 @@ export const zh = {
   'board.action.manageTemplates': '⌗ 管理模板…',
   'board.search.placeholder': '搜索标题 / ID…',
   'board.filter.allProjects': '全部项目',
+  'board.filter.parentAll': '全部父任务',
+  'board.filter.parentTitle': '按父任务（史诗）筛选：显示它的全部后代任务',
   'board.sort.title': '列内排序',
   'board.sort.default': '默认排序',
   'board.sort.updated': '最近更新',

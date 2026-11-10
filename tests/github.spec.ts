@@ -37,13 +37,15 @@ describe('GitHub provider', () => {
       urgency: 'urgent', assignedTo: 'alice', assignees: ['alice', 'bob'],
       status: 'open', closed: false, url: 'https://github.com/acme/repo/issues/7',
     })
-    expect(calls).toHaveLength(1)
-    expect(calls[0]!.headers.get('authorization')).toBe('Bearer private-token')
-    expect(calls[0]!.headers.get('x-github-api-version')).toBe('2022-11-28')
-    expect(calls[0]!.url.pathname).toBe('/repos/acme/repo/issues')
-    expect(calls[0]!.url.searchParams.get('state')).toBe('all')
-    expect(calls[0]!.url.searchParams.get('page')).toBe('1')
-    expect(calls[0]!.url.href).not.toContain('private-token')
+    // The provider also asks GraphQL for the sub-issue tree; REST assertions scope to it.
+    const rest = calls.filter(call => call.url.pathname.startsWith('/repos/'))
+    expect(rest).toHaveLength(1)
+    expect(rest[0]!.headers.get('authorization')).toBe('Bearer private-token')
+    expect(rest[0]!.headers.get('x-github-api-version')).toBe('2022-11-28')
+    expect(rest[0]!.url.pathname).toBe('/repos/acme/repo/issues')
+    expect(rest[0]!.url.searchParams.get('state')).toBe('all')
+    expect(rest[0]!.url.searchParams.get('page')).toBe('1')
+    expect(rest[0]!.url.href).not.toContain('private-token')
   })
 
   it('attaches the Project Status option when a board is configured', async () => {
@@ -120,7 +122,38 @@ describe('GitHub provider', () => {
     }) as typeof fetch
     const items = await new GithubProvider(config(), mock, 0).getItems('acme/repo', AbortSignal.timeout(1000))
     expect(items).toHaveLength(101)
-    expect(calls.map(call => call.searchParams.get('page'))).toEqual(['1', '2'])
+    // Scope to REST pages: the provider also calls GraphQL for the issue tree.
+    expect(calls.filter(call => call.pathname.startsWith('/repos/')).map(call => call.searchParams.get('page'))).toEqual(['1', '2'])
+  })
+
+  it('classifies sub-issues: children carry their parent, roots with children are epics', async () => {
+    const mock = (async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/graphql') {
+        return response({
+          data: {
+            repository: {
+              issues: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  { number: 16, parent: null, subIssues: { totalCount: 2 } },
+                  { number: 5, parent: { number: 16 }, subIssues: { totalCount: 1 } },
+                  { number: 8, parent: { number: 5 }, subIssues: { totalCount: 0 } },
+                ],
+              },
+            },
+          },
+        })
+      }
+      return response([issue(16), issue(5), issue(8)])
+    }) as typeof fetch
+    const items = await new GithubProvider(config(), mock, 0).getItems('acme/repo', AbortSignal.timeout(1000))
+    const byId = new Map(items.map(item => [item.id, item]))
+    expect(byId.get('16')).toMatchObject({ childCount: 2 })
+    expect(byId.get('16')!.parentNumber).toBeUndefined()
+    expect(byId.get('5')).toMatchObject({ parentNumber: 16, childCount: 1 })
+    expect(byId.get('8')).toMatchObject({ parentNumber: 5 })
+    expect(byId.get('8')!.childCount).toBeUndefined()
   })
 
   it('skips new closed issues but keeps tracking closed issues already on the board', async () => {
@@ -143,7 +176,7 @@ describe('GitHub provider', () => {
       return response([])
     }) as typeof fetch
     await new GithubProvider(config({ since: '2026-10-01' }), mock, 0).getItems('acme/repo', AbortSignal.timeout(1000))
-    expect(calls[0]!.searchParams.get('since')).toBe('2026-10-01T00:00:00Z')
+    expect(calls.find(call => call.pathname.startsWith('/repos/'))!.searchParams.get('since')).toBe('2026-10-01T00:00:00Z')
     await expect(new GithubProvider(config({ since: '10/01/2026' }), mock, 0).getItems('acme/repo', AbortSignal.timeout(1000))).rejects.toThrow('since date')
   })
 

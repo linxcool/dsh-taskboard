@@ -89,6 +89,13 @@ export interface ControllerState {
   filters: BoardFilters
   /** Free-text search over title/id (case-insensitive). */
   search: string
+  /**
+   * Epic filter (P1 v2): the root sub-issue number whose descendants are shown.
+   * Epics never become cards, so this is the board's only handle on them.
+   * Transient (not persisted) — a stale epic filter after a re-sync would hide
+   * everything and look like an empty board.
+   */
+  parentFilter?: number
   /** Column sort order. */
   sortBy: SortBy
   /** Collapsed board columns (persisted locally). */
@@ -321,6 +328,11 @@ export class BoardController {
   /** Set the free-text search (transient — not persisted). */
   setSearch(search: string): void {
     this.setState({ search })
+  }
+
+  /** Switch the epic (sub-issue root) filter; undefined shows every card. */
+  setParentFilter(parentFilter?: number): void {
+    this.setState({ parentFilter })
   }
 
   /** Set the column sort order (persisted). */

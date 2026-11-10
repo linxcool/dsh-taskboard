@@ -11,6 +11,7 @@ import { MAIN_STATUSES, canTransition, completedDisplayLimitOf } from '../../sha
 import { PLUGIN_VERSION } from '../../shared/version.ts'
 import { COLUMN_COLLAPSE_KEYS, COLUMN_EXPAND_KEYS, COLUMN_KEYS, URGENCY_KEYS, columnLabel } from './labels.ts'
 import { githubStatusMapOf } from '../../shared/github-status-map.ts'
+import { externalIssueRef, isDescendantOf, parentsByIssue } from '../../shared/external.ts'
 import type { ExternalSyncStatus } from '../../shared/external.ts'
 import { externalRequest } from '../external-api.ts'
 import { useT } from '../i18n/runtime.ts'
@@ -185,6 +186,22 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
   const allLive = filterTasks(state, state.ledger.tasks.filter(t => t.trashedAt === undefined))
   const needsHumanCount = allLive.filter(task => humanWaiting(task).needs).length
   const live = onlyNeedsHuman ? allLive.filter(task => humanWaiting(task).needs) : allLive
+  // Epic filter (P1 v2): epics are not cards, so the toolbar offers them as a
+  // filter dimension; selecting one keeps its descendants at ANY depth.
+  const epicOptions = (() => {
+    const seen = new Map<string, { repo: string; number: number; title: string; children: number }>()
+    for (const record of Object.values(state.ledger.externalSync ?? {})) {
+      for (const epic of record.epics ?? []) {
+        const key = externalIssueRef(epic.repo, epic.number)
+        if (!seen.has(key)) seen.set(key, epic)
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.number - b.number)
+  })()
+  const parentMap = state.parentFilter === undefined ? undefined : parentsByIssue(state.ledger.tasks)
+  const visibleLive = state.parentFilter === undefined || parentMap === undefined
+    ? live
+    : live.filter(task => isDescendantOf(task, state.parentFilter!, parentMap))
   const selected = state.selectedId === undefined ? undefined : state.ledger.tasks.find(t => t.id === state.selectedId)
   const detailPanelRef = useRef<HTMLDivElement>(null)
 
@@ -230,7 +247,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
     <div className="dsh-atb-board">
       <div className="dsh-atb-toolbar">
         <h2 className="dsh-atb-title">{t('board.title')}</h2>
-        <span className="dsh-atb-count">{t('board.count.tasks', { n: live.length, rev: state.ledger.revision })}</span>
+        <span className="dsh-atb-count">{t('board.count.tasks', { n: visibleLive.length, rev: state.ledger.revision })}</span>
         <div className="dsh-atb-newmenu">
           <button
             type="button"
@@ -291,6 +308,21 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
           <option value="">{t('board.filter.allProjects')}</option>
           {state.workspaces.map(ws => <option key={ws.id} value={ws.id}>{ws.title || ws.path}</option>)}
         </select>
+        {epicOptions.length > 0 && (
+          <select
+            className="dsh-atb-select dsh-atb-parent-filter"
+            value={state.parentFilter ?? ''}
+            title={t('board.filter.parentTitle')}
+            onChange={e => controller.setParentFilter(e.target.value === '' ? undefined : Number(e.target.value))}
+          >
+            <option value="">{t('board.filter.parentAll')}</option>
+            {epicOptions.map(epic => (
+              <option key={externalIssueRef(epic.repo, epic.number)} value={epic.number}>
+                {`#${epic.number} ${epic.title}`}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           className="dsh-atb-select"
           value={state.sortBy}
@@ -399,7 +431,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
         : (
           <div className="dsh-atb-columns">
             {MAIN_STATUSES.map(status => {
-              const rawColumnTasks = live.filter(t => t.status === status)
+              const rawColumnTasks = visibleLive.filter(t => t.status === status)
               const isBacklog = status === 'backlog'
               const isTodo = status === 'todo'
               const isDone = status === 'done'

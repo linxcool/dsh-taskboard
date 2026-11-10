@@ -13,6 +13,15 @@ const source: ExternalSource = { connectionId: 'c', provider: 'zentao', syncedAt
 const directories: string[] = []
 afterEach(async () => { await Promise.all(directories.splice(0).map(d => rm(d, { recursive: true, force: true }))) })
 
+/** Switch the fixture to a GitHub connection accepting `issue` items. */
+async function configureGithub(f: { service: { configure: (body: unknown) => Promise<void> } }) {
+  await f.service.configure({
+    provider: 'github', baseUrl: 'https://api.github.com', authMode: 'token', account: 'alice',
+    credentials: { token: 'private-token' },
+    mappings: [{ projectId: 'acme/repo', workspaceId: 'ws' }],
+  } as never)
+}
+
 describe('external merge', () => {
   it('scopes identities by connection, project and type', () => {
     expect(externalKey('a', item)).not.toBe(externalKey('b', item))
@@ -70,6 +79,79 @@ describe('sync service', () => {
     expect(f.store.snapshot().tasks.map(t => t.external?.item.id).sort()).toEqual(['mine', 'no-assignee'])
     f.service.dispose()
   })
+  it('keeps epics out of the board and records them as filter facets', async () => {
+    const f = await fixture()
+    f.set([
+      { ...item, id: '16', childCount: 2 },
+      { ...item, id: '5', parentNumber: 16, childCount: 1 },
+      { ...item, id: '8', parentNumber: 5 },
+    ])
+    const result = await f.service.sync()
+    // The epic is a facet, not a card; the other two are cards.
+    expect(result.created).toBe(2)
+    expect(f.store.snapshot().tasks.map(task => task.external!.item.id).sort()).toEqual(['5', '8'])
+    const config = (await f.service.status()).config!
+    const epics = f.store.snapshot().externalSync?.[config.id]?.epics
+    expect(epics).toEqual([{ key: expect.any(String), repo: 'project:1', number: 16, title: 'Bug', children: 2 }])
+    f.service.dispose()
+  })
+
+  it('archives a card when its issue closes, with a host comment', async () => {
+    const f = await fixture()
+    await configureGithub(f)
+    f.set([{ ...item, type: 'issue', projectId: 'acme/repo' }])
+    await f.service.sync()
+    const id = f.store.snapshot().tasks[0]!.id
+    f.set([{ ...item, type: 'issue', projectId: 'acme/repo', closed: true, status: 'closed' }])
+    const result = await f.service.sync()
+    expect(result.updated).toBe(1)
+    const task = f.store.get(id)!
+    expect(task.status).toBe('archived')
+    expect(task.comments.at(-1)).toMatchObject({ threadId: 'host' })
+    expect(task.comments.at(-1)!.body).toContain('已关闭')
+    f.service.dispose()
+  })
+
+  it('leaves an in-flight card alone when the issue closes, and archives it later', async () => {
+    const f = await fixture()
+    await configureGithub(f)
+    f.set([{ ...item, type: 'issue', projectId: 'acme/repo' }])
+    await f.service.sync()
+    const id = f.store.snapshot().tasks[0]!.id
+    await f.store.mutate('task-moved', ledger => {
+      const task = ledger.tasks.find(candidate => candidate.id === id)!
+      task.status = 'in_progress'
+      task.claimedBy = 'session-live'
+      return [task]
+    })
+    f.set([{ ...item, type: 'issue', projectId: 'acme/repo', closed: true, status: 'closed' }])
+    await f.service.sync()
+    expect(f.store.get(id)!.status).toBe('in_progress')
+
+    await f.store.mutate('task-moved', ledger => {
+      const task = ledger.tasks.find(candidate => candidate.id === id)!
+      delete task.claimedBy
+      task.status = 'todo'
+      return [task]
+    })
+    await f.service.sync()
+    expect(f.store.get(id)!.status).toBe('archived')
+    f.service.dispose()
+  })
+
+  it('archives an existing card that became an epic', async () => {
+    const f = await fixture()
+    await f.service.sync()
+    const id = f.store.snapshot().tasks[0]!.id
+    f.set([{ ...item, childCount: 3 }])
+    const result = await f.service.sync()
+    expect(result.updated).toBe(1)
+    const task = f.store.get(id)!
+    expect(task.status).toBe('archived')
+    expect(task.comments.at(-1)!.body).toContain('父任务')
+    f.service.dispose()
+  })
+
   it('maps the project status onto the board column for new cards', async () => {
     const f = await fixture()
     await f.service.configure({

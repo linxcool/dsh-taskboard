@@ -21,8 +21,19 @@ export type ExternalConfig = ExternalConnection & { credentials: Record<string, 
 export type ExternalProject = { id: string; name: string }
 export type ExternalAccount = { account: string; name?: string }
 export type SyncResult = { created: number; updated: number; unchanged: number; conflicts: number; ignored: number; at: number }
+
+/**
+ * A root work item that HAS children — an epic.
+ *
+ * Epics do not become cards: they are the board's filter dimension. The
+ * descriptor keeps just enough to render a filter option (title + the tracker's
+ * own status) without storing a task for it.
+ */
+export type ExternalEpic = { key: string; repo: string; number: number; title: string; status?: string; children: number }
 export type ExternalSyncRecord = {
   links: Record<string, string>; ignored: string[]; lastResult?: SyncResult; lastError?: string; lastAttemptAt?: number
+  /** Root items with children seen during the last sync (filter facets). */
+  epics?: ExternalEpic[]
 }
 export function normalizeExternalSyncRecords(raw: unknown): Record<string, ExternalSyncRecord> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
@@ -35,7 +46,17 @@ export function normalizeExternalSyncRecords(raw: unknown): Record<string, Exter
     const r = e.lastResult as Record<string, unknown> | undefined
     const lastResult = r && typeof r === 'object' && ['created', 'updated', 'unchanged', 'conflicts', 'ignored', 'at'].every(k => typeof r[k] === 'number' && Number.isFinite(r[k]) && (r[k] as number) >= 0)
       ? { created: r.created as number, updated: r.updated as number, unchanged: r.unchanged as number, conflicts: r.conflicts as number, ignored: r.ignored as number, at: r.at as number } : undefined
+    const epics = Array.isArray(e.epics) ? e.epics.flatMap((entry): ExternalEpic[] => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+      const epic = entry as Record<string, unknown>
+      if (typeof epic.key !== 'string' || typeof epic.repo !== 'string' || typeof epic.title !== 'string') return []
+      if (typeof epic.number !== 'number' || !Number.isSafeInteger(epic.number)) return []
+      if (typeof epic.children !== 'number' || !Number.isSafeInteger(epic.children) || epic.children <= 0) return []
+      return [{ key: epic.key, repo: epic.repo, number: epic.number, title: epic.title, children: epic.children,
+        ...(typeof epic.status === 'string' && epic.status.length > 0 ? { status: epic.status } : {}) }]
+    }) : undefined
     return [[id, { links, ignored, ...(lastResult ? { lastResult } : {}),
+      ...(epics !== undefined && epics.length > 0 ? { epics } : {}),
       ...(typeof e.lastError === 'string' ? { lastError: e.lastError } : {}),
       ...(typeof e.lastAttemptAt === 'number' && Number.isFinite(e.lastAttemptAt) ? { lastAttemptAt: e.lastAttemptAt } : {}) }]]
   }))
@@ -64,6 +85,13 @@ export type ExternalItem = ExternalFields & {
    * column through the connection's statusMap.
    */
   projectStatus?: string
+  /**
+   * The parent work item's number in the SAME project scope (GitHub sub-issue).
+   * Absent for root items — those with children are epics, not cards.
+   */
+  parentNumber?: number
+  /** How many sub-items this item has (0/absent = a leaf). */
+  childCount?: number
 }
 export type ExternalSource = {
   providerName?: string
@@ -76,6 +104,45 @@ export type ExternalSource = {
 
 export function externalKey(connectionId: string, item: Pick<ExternalItem, 'projectId' | 'type' | 'id'>): string {
   return JSON.stringify([connectionId, item.projectId, item.type, item.id])
+}
+
+/** `repo#number` for an external issue — the only collision-free identity. */
+export function externalIssueRef(projectId: string, number: number): string {
+  return `${projectId}#${number}`
+}
+
+/**
+ * `repo#issue` → parent issue number, for the cards on the board.
+ *
+ * Epics are not cards, so the chain ends at a number with no entry here; that
+ * missing entry is the epic itself.
+ */
+export function parentsByIssue(tasks: readonly { external?: ExternalSource }[]): Map<string, number> {
+  const parents = new Map<string, number>()
+  for (const task of tasks) {
+    const item = task.external?.item
+    if (item?.parentNumber === undefined) continue
+    parents.set(externalIssueRef(item.projectId, Number(item.id)), item.parentNumber)
+  }
+  return parents
+}
+
+/**
+ * Whether a card belongs to the descendant tree of an epic (any depth).
+ * @param task - the card.
+ * @param epicNumber - the root issue number to test against.
+ * @param parents - the map from {@link parentsByIssue}.
+ */
+export function isDescendantOf(task: { external?: ExternalSource }, epicNumber: number, parents: ReadonlyMap<string, number>): boolean {
+  const item = task.external?.item
+  if (item === undefined) return false
+  let current = item.parentNumber
+  // Guard against a malformed/cyclic chain from a broken source.
+  for (let step = 0; current !== undefined && step < 64; step++) {
+    if (current === epicNumber) return true
+    current = parents.get(externalIssueRef(item.projectId, current))
+  }
+  return false
 }
 
 /** Explicit reconstruction also prevents credentials/unknown fields entering exports. */
@@ -97,6 +164,8 @@ export function normalizeExternalSource(raw: unknown): ExternalSource | undefine
     urgency: i.urgency as ExternalItem['urgency'], closed: i.closed,
     ...(Array.isArray(i.assignees) ? { assignees: i.assignees.filter((v): v is string => typeof v === 'string') } : {}),
     ...(typeof i.projectStatus === 'string' && i.projectStatus.length > 0 ? { projectStatus: i.projectStatus } : {}),
+    ...(typeof i.parentNumber === 'number' && Number.isSafeInteger(i.parentNumber) && i.parentNumber > 0 ? { parentNumber: i.parentNumber } : {}),
+    ...(typeof i.childCount === 'number' && Number.isSafeInteger(i.childCount) && i.childCount > 0 ? { childCount: i.childCount } : {}),
   }
   return { connectionId: e.connectionId, provider: e.provider, ...(typeof e.providerName === 'string' ? { providerName: e.providerName } : {}), syncedAt: e.syncedAt, item,
     conflicts: Array.isArray(e.conflicts) ? e.conflicts.filter((v): v is keyof ExternalFields => ['title', 'description', 'urgency'].includes(v)) : [] }

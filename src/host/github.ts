@@ -48,6 +48,20 @@ const PROJECT_ITEMS_QUERY = `query TaskboardProjectItems($login: String!, $num: 
   }
 }`
 
+/** The repo's issue tree: which issues are sub-issues and who has children. */
+const REPO_ISSUE_TREE_QUERY = `query TaskboardIssueTree($owner: String!, $repo: String!, $cursor: String) {
+  repository(owner: $owner, name: $repo) {
+    issues(first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        parent { number }
+        subIssues(first: 1) { totalCount }
+      }
+    }
+  }
+}`
+
 /** Comma-separated label names, trimmed and lower-cased for lookups. */
 function words(raw: string | undefined): ReadonlySet<string> {
   return new Set((raw ?? '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean))
@@ -71,6 +85,44 @@ export class GithubProvider implements ExternalTaskProvider {
     this.throttle = new ExternalRequestThrottle(Number.isFinite(intervalMs) && intervalMs >= 0 ? intervalMs : 100)
     this.urgent = words(config.settings.urgentLabels ?? 'urgent,high,紧急,高')
     this.relaxed = words(config.settings.relaxedLabels ?? 'low,nice to have,低')
+  }
+
+  /**
+   * The repo's sub-issue tree: `number → { parent?, children }`.
+   *
+   * GitHub exposes sub-issues only through GraphQL. Roots WITH children are
+   * epics: the sync keeps them out of the board and uses them as filter facets.
+   * A failed query degrades to an empty map (the import still works; nothing is
+   * classified as an epic).
+   */
+  private async issueTree(projectId: string, signal: AbortSignal): Promise<ReadonlyMap<number, { parent?: number; children: number }>> {
+    const tree = new Map<number, { parent?: number; children: number }>()
+    const [owner, repo] = projectId.split('/')
+    if (owner === undefined || repo === undefined) return tree
+    let cursor: string | undefined
+    for (let page = 0; page < MAX_PROJECT_PAGES; page++) {
+      const data = await this.graphql(REPO_ISSUE_TREE_QUERY, { owner, repo, cursor: cursor ?? null }, signal)
+      const repository = data.repository as Record<string, unknown> | undefined
+      const issues = repository?.issues as { pageInfo?: { hasNextPage?: unknown; endCursor?: unknown }; nodes?: unknown } | undefined
+      const nodes = Array.isArray(issues?.nodes) ? issues.nodes : []
+      for (const node of nodes) {
+        if (!node || typeof node !== 'object') continue
+        const entry = node as { number?: unknown; parent?: { number?: unknown } | null; subIssues?: { totalCount?: unknown } }
+        const number = entry.number
+        if (typeof number !== 'number' || !Number.isSafeInteger(number)) continue
+        const parent = entry.parent?.number
+        const children = entry.subIssues?.totalCount
+        tree.set(number, {
+          ...(typeof parent === 'number' && Number.isSafeInteger(parent) && parent > 0 ? { parent } : {}),
+          children: typeof children === 'number' && Number.isSafeInteger(children) && children > 0 ? children : 0,
+        })
+      }
+      const hasNext = issues?.pageInfo?.hasNextPage === true
+      const endCursor = issues?.pageInfo?.endCursor
+      if (!hasNext || typeof endCursor !== 'string' || endCursor.length === 0) break
+      cursor = endCursor
+    }
+    return tree
   }
 
   private async get(path: string, signal: AbortSignal): Promise<unknown> {
@@ -216,6 +268,11 @@ export class GithubProvider implements ExternalTaskProvider {
       return new Map<string, string>()
     })
     const since = this.sinceQuery()
+    // Sub-issue tree is fetched once per sync too; degrade the same way.
+    const tree = await this.issueTree(projectId, signal).catch((error: unknown) => {
+      console.warn('[dsh-taskboard] GitHub sub-issue tree unavailable; importing without parent/child info:', error instanceof Error ? error.message : String(error))
+      return new Map<number, { parent?: number; children: number }>()
+    })
     for (let page = 1; page <= MAX_ISSUE_PAGES; page++) {
       const raw = await this.get(`/repos/${repo}/issues?state=all&per_page=100&sort=updated&direction=desc&page=${page}${since}`, signal)
       if (!Array.isArray(raw)) throw new Error('invalid GitHub issue list')
@@ -225,7 +282,7 @@ export class GithubProvider implements ExternalTaskProvider {
         const record = entry as Record<string, unknown>
         // The issues endpoint also returns pull requests; the board tracks issues only.
         if (record.pull_request !== undefined) continue
-        const item = this.normalize(projectId, record, statuses)
+        const item = this.normalize(projectId, record, statuses, tree)
         if (seen.has(item.id)) continue
         seen.add(item.id)
         added++
@@ -254,7 +311,8 @@ export class GithubProvider implements ExternalTaskProvider {
       console.warn('[dsh-taskboard] GitHub Project Status unavailable; importing without status mapping:', error instanceof Error ? error.message : String(error))
       return new Map<string, string>()
     })
-    return this.normalize(projectId, record, statuses)
+    const tree = await this.issueTree(projectId, signal).catch(() => new Map<number, { parent?: number; children: number }>())
+    return this.normalize(projectId, record, statuses, tree)
   }
 
   private sinceQuery(): string {
@@ -264,7 +322,7 @@ export class GithubProvider implements ExternalTaskProvider {
     return `&since=${encodeURIComponent(`${since}T00:00:00Z`)}`
   }
 
-  private normalize(projectId: string, raw: Record<string, unknown>, statuses?: ReadonlyMap<string, string>): ExternalItem {
+  private normalize(projectId: string, raw: Record<string, unknown>, statuses?: ReadonlyMap<string, string>, tree?: ReadonlyMap<number, { parent?: number; children: number }>): ExternalItem {
     const number = raw.number
     if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) throw new Error('invalid GitHub issue number')
     const title = raw.title
@@ -283,6 +341,8 @@ export class GithubProvider implements ExternalTaskProvider {
       priority: labels.join(','), status: state, assignedTo: this.login(raw.assignee) ?? assignees[0] ?? '',
       assignees, closed: state === 'closed', urgency, url,
       ...(statuses?.has(`${projectId}#${number}`) === true ? { projectStatus: statuses.get(`${projectId}#${number}`)! } : {}),
+      ...(tree?.get(number)?.parent !== undefined ? { parentNumber: tree.get(number)!.parent! } : {}),
+      ...(tree !== undefined && (tree.get(number)?.children ?? 0) > 0 ? { childCount: tree.get(number)!.children } : {}),
     }
   }
 
