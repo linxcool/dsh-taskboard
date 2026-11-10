@@ -16,6 +16,11 @@ function routeResponse(path: string): unknown {
   if (path === '/dsh-taskboard/workspaces') {
     return { ok: true, value: [{ id: 'ws-a', path: '/proj/a', title: 'A', sessionCount: 0 }] }
   }
+  // The board reads the external connection once per mount for column labels
+  // (no connection here → built-in copy).
+  if (path === '/dsh-taskboard/external') {
+    return { ok: true, value: { providers: [], running: false, ignoredCount: 0 } }
+  }
   throw new Error(`unexpected fetch ${path}`)
 }
 

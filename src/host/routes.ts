@@ -49,6 +49,7 @@ import {
   type TaskRecord,
   type SystemCommentRow,
 } from '../shared/protocol.ts'
+import { migrateEmployeeBindings } from './employee-migration.ts'
 import { WORKTREE_DIR, worktreePathOf, type GitFace } from './git.ts'
 import { removeMirror, repoMainPath } from './isolation.ts'
 import { createRepoScanner, type RepoScanner } from './repos.ts'
@@ -613,8 +614,21 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
         }
 
         // Model catalog (0.5.5; dynamically discovers models & presets from runtime).
+        // Doubles as the one-shot employee migration trigger (P3 v2): the
+        // preset catalog is only available here, and a failed lookup leaves the
+        // marker unwritten so the next call retries.
         if (pathname === `${ROUTE_PREFIX}/model-catalog`) {
           const catalog = await options.modelCatalog?.().catch(() => undefined)
+          const presets = catalog?.presets ?? []
+          if (presets.length > 0) {
+            await store.mutate('employees-migrated', ledger => {
+              const next = migrateEmployeeBindings(ledger, presets, () => new Date(options.now()).toISOString())
+              if (next === undefined) return undefined
+              ledger.employees = next.employees
+              ledger.employeesMigratedAt = next.employeesMigratedAt
+              return []
+            })
+          }
           json(res, {
             ok: true,
             value: {

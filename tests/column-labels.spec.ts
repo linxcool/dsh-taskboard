@@ -5,6 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { columnLabel } from '../src/client/board/labels.ts'
+import { waitFor } from './wait-for.ts'
 
 const zh: Record<string, string> = {
   'status.column.backlog': '待澄清',
@@ -68,12 +69,13 @@ describe('board column headers', () => {
     const root = createRoot(host)
     root.render(React.createElement(TaskBoard, { controller }))
     controller.start()
-    await new Promise(resolve => setTimeout(resolve, 60))
+    // The label arrives after the /external round-trip resolves; poll instead
+    // of guessing a sleep (a fixed sleep flaked under parallel load).
+    const heads = () => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead')).map(head => head.textContent ?? '')
+    await waitFor(() => heads().some(text => text.includes('等你点头')))
 
-    const heads = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead')).map(head => head.textContent ?? '')
-    expect(heads.some(text => text.includes('等你点头'))).toBe(true)
     // A column the map does not cover keeps the shipped copy.
-    expect(heads.some(text => text.includes('待澄清'))).toBe(true)
+    expect(heads().some(text => text.includes('待澄清'))).toBe(true)
 
     root.unmount()
   })

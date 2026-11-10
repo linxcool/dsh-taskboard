@@ -1458,6 +1458,21 @@ describe('taskboard routes 0.5.0 (board settings → default isolation)', () => 
     expect(badShape.status).toBe(400)
   })
 
+  it('migrates the legacy reviewer inference once, from the model catalog', async () => {
+    expect(store.snapshot().employeesMigratedAt).toBeUndefined()
+    const first = await (await fetch(`${base}/dsh-taskboard/model-catalog`)).json()
+    expect(first.value.presets.length).toBeGreaterThan(0)
+    // The fixture catalog has no reviewer-ish preset: the marker is still
+    // written (so a later preset rename cannot resurrect the guess).
+    expect(store.snapshot().employeesMigratedAt).toEqual(expect.any(String))
+    expect(store.snapshot().employees).toEqual([])
+    const revision = store.snapshot().revision
+
+    const second = await (await fetch(`${base}/dsh-taskboard/model-catalog`)).json()
+    expect(second.status ?? 200).toBe(200)
+    expect(store.snapshot().revision).toBe(revision)
+  })
+
   it('keeps the employee table across a ledger reload and a whole-book replace', async () => {
     const table = [{ presetId: 'std', role: 'maker', enabled: true, permission: 'read-only' }]
     expect((await post('/dsh-taskboard/employees', { employees: table })).status).toBe(200)

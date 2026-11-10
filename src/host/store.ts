@@ -31,7 +31,7 @@ export interface LedgerChange {
   /** The mutated tasks, if any (a comment purge may touch none). */
   tasks: readonly TaskRecord[]
   /** What kind of mutation this was (for SSE event naming later). */
-  kind: 'task-created' | 'task-updated' | 'task-moved' | 'task-deleted' | 'comment-added' | 'execution-recorded' | 'settings-updated' | 'employees-updated' | 'ledger-replaced' | 'external-sync-updated'
+  kind: 'task-created' | 'task-updated' | 'task-moved' | 'task-deleted' | 'comment-added' | 'execution-recorded' | 'settings-updated' | 'employees-updated' | 'employees-migrated' | 'ledger-replaced' | 'external-sync-updated'
 }
 
 /** Options for {@link TaskStore}. */
