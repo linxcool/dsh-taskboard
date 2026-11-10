@@ -156,7 +156,7 @@ export type AttachmentUpload = {
 export type DeleteTaskBody = { ifVersion?: number; purge?: boolean }
 
 /** Run request body; `reuse: true` = 续跑 (keep a live worktree as-is). */
-export type RunTaskBody = { reuse?: boolean }
+export type RunTaskBody = { reuse?: boolean; openingBody?: string }
 
 /** One repo's merge outcome in a multi-repo merge (0.6.3; `repo: ''` = the workspace root repo). */
 export type MergeRepoResult = {

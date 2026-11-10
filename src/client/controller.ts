@@ -704,6 +704,24 @@ export class BoardController {
     }
   }
 
+  /**
+   * Start an execution with an edited opening message ("open session").
+   *
+   * The text is what the card's composer showed; the host injects the plugin
+   * framing line on top of it. The card's own prompt field is untouched.
+   * @returns whether the run was accepted.
+   */
+  async startWithOpeningBody(id: string, openingBody: string): Promise<boolean> {
+    try {
+      await this.client.run(id, { openingBody })
+      await this.refresh()
+      return true
+    } catch (error) {
+      this.setState({ error: error instanceof Error ? error.message : String(error) })
+      return false
+    }
+  }
+
   /** Cancel the running execution (stops the agent session; task returns to todo). */
   async cancel(id: string): Promise<void> {
     try {

@@ -646,6 +646,55 @@ span.dsh-atb-comment-delivered { cursor: default; }
 .dsh-atb-perm-source[data-kind="override"] { color: #b45309; }
 .dsh-atb-form-hint { margin: 6px 0 0; font-size: 11.5px; color: var(--dsw-alias-label-secondary, gray); }
 
+/* Card conversation slot + its inline panel (P3 v2). */
+.dsh-atb-sessmenu { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.dsh-atb-sess-slot {
+  align-self: flex-start; font: inherit; font-size: 11px; line-height: 1.5; cursor: pointer;
+  padding: 1px 7px; border-radius: 999px;
+  border: 1px solid rgba(47,111,221,.4); background: transparent; color: #2b5f9e;
+}
+.dsh-atb-sess-slot[data-empty="true"] {
+  border-style: dashed; border-color: var(--dsw-alias-border-l2, rgba(128,128,128,.4));
+  color: var(--dsw-alias-label-secondary, gray);
+}
+.dsh-atb-sess-slot[data-outcome="running"] { border-color: rgba(46,158,107,.5); color: #2e9e6b; }
+.dsh-atb-sess-slot[data-outcome="failed"] { border-color: rgba(194,69,61,.5); color: #c2453d; }
+.dsh-atb-sess-panel {
+  display: flex; flex-direction: column; gap: 5px; padding: 8px 9px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.35)); border-radius: 8px;
+  background: var(--dsw-bg-elevated, rgba(128,128,128,.08));
+}
+.dsh-atb-sess-head { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; }
+.dsh-atb-sess-count { color: var(--dsw-alias-label-tertiary, gray); font-weight: 400; }
+.dsh-atb-sess-x {
+  margin-left: auto; border: 0; background: transparent; cursor: pointer;
+  color: var(--dsw-alias-label-secondary, gray); font-size: 11px;
+}
+.dsh-atb-sess-row {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  font: inherit; font-size: 11px; padding: 3px 5px; border-radius: 6px; cursor: pointer;
+  border: 1px solid transparent; background: transparent; color: inherit;
+}
+.dsh-atb-sess-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
+.dsh-atb-sess-row code { font-size: 10.5px; }
+.dsh-atb-sess-state[data-outcome], .dsh-atb-sess-row[data-outcome="running"] .dsh-atb-sess-state { color: #2e9e6b; }
+.dsh-atb-sess-row[data-outcome="failed"] .dsh-atb-sess-state { color: #c2453d; }
+.dsh-atb-sess-rounds { margin-left: auto; color: var(--dsw-alias-label-tertiary, gray); }
+.dsh-atb-sess-foot {
+  border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 11px;
+  color: var(--dsw-alias-label-secondary, gray); text-align: center; padding-top: 3px;
+  border-top: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25));
+}
+.dsh-atb-sess-hint { margin: 0; font-size: 11px; color: var(--dsw-alias-label-secondary, gray); }
+.dsh-atb-sess-note { margin: 0; font-size: 10.5px; color: var(--dsw-alias-label-tertiary, gray); }
+.dsh-atb-sess-text {
+  width: 100%; box-sizing: border-box; resize: vertical; font: 11px/1.5 ui-monospace, monospace;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.35)); border-radius: 6px;
+  padding: 5px 6px; background: transparent; color: inherit;
+}
+.dsh-atb-sess-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.dsh-atb-sess-actions .dsh-atb-btn { font-size: 11px; padding: 3px 8px; }
+
 /* Employee catalog v2: four states, inline role/permission editing. */
 .dsh-atb-employee[data-state="disabled"] { opacity: .62; }
 .dsh-atb-employee[data-state="stale"] { border-style: dashed; opacity: .8; }

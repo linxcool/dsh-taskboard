@@ -1467,6 +1467,47 @@ export function taskSessionId(task: TaskRecord): string | undefined {
 }
 
 /**
+ * One conversation a task ran in, aggregated across its executions.
+ *
+ * A task can run many times (manual reruns, comment wakes, cron rounds) and
+ * reuses the same session for some of them, so the card shows CONVERSATIONS,
+ * not execution records: same session = one entry with a round count.
+ */
+export type TaskSessionSummary = {
+  sessionId: string
+  /** How many execution records ran in this session. */
+  rounds: number
+  /** Latest activity (startedAt/endedAt/lastActivityAt), newest first in the list. */
+  lastAt: number
+  /** Outcome of the newest execution in this session. */
+  outcome: ExecutionRecord['outcome']
+  /** Trigger of the newest execution in this session. */
+  trigger: ExecutionRecord['trigger']
+}
+
+/** Aggregate a task's executions by session, newest session first. */
+export function sessionsOf(task: TaskRecord): TaskSessionSummary[] {
+  const bySession = new Map<string, TaskSessionSummary>()
+  for (const execution of task.executions ?? []) {
+    const sessionId = execution.sessionId
+    if (sessionId === undefined || sessionId.length === 0) continue
+    const at = execution.lastActivityAt ?? execution.endedAt ?? execution.startedAt ?? 0
+    const known = bySession.get(sessionId)
+    if (known === undefined) {
+      bySession.set(sessionId, { sessionId, rounds: 1, lastAt: at, outcome: execution.outcome, trigger: execution.trigger })
+      continue
+    }
+    known.rounds += 1
+    if (at >= known.lastAt) {
+      known.lastAt = at
+      known.outcome = execution.outcome
+      known.trigger = execution.trigger
+    }
+  }
+  return [...bySession.values()].sort((a, b) => b.lastAt - a.lastAt)
+}
+
+/**
  * Validate and normalize a pinned model: `{ provider, model, reasoningEffort? }`,
  * provider and model must be non-empty trimmed strings.
  * @param raw - the raw input.
