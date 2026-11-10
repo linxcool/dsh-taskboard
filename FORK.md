@@ -40,16 +40,22 @@
 - 失败不会阻塞移卡，只在任务卡上追加一条 host 评论说明原因。
 - 需要 `Issues: Read and write` + `Projects: Read and write` 的 token（或 classic `repo` + `project`）。
 
-### P3 · 员工卡（Agent 预设目录）
+### P3 · 员工卡（Agent 预设目录 + 显式绑定）
 
 - 看板工具栏「👥 员工」打开员工目录：读取 DSH 的 Agent preset，把每张预设显示为员工卡。
-- 选择员工 → 用该 preset 打开建卡表单；名称/id 含 `review/reviewer/审查/评审/验收/审核` 的预设默认只读权限，其余默认可写，表单内仍可修改。
-- 不复制 preset 配置、不新增员工数据模型；preset 仍是唯一配置来源。
+- **角色与默认权限是显式数据，不再按名字推断**：台账顶层的 `employees` 表（`presetId → role / permission / enabled / defaultReviewer`），四态显示——已绑定启用 / 已绑定停用 / 未分配 / 预设不可用。
+- 角色只有 `maker` / `reviewer`；★ 标记默认评审员工，全表唯一。角色与权限直接在卡片上改，未分配只给一个角色下拉。
+- 权限优先级：**任务显式 > 员工绑定 > 看板默认**；GUI 建卡、`taskboard_create` 与「换 preset 改卡」共用同一套解析（`permissionForCreate`）。换 preset 时只有「仍等于旧绑定/看板默认」的权限才重算，用户手设的保留。
+- 绑定表放在台账顶层而不是 `settings`：`settings/update` 是整对象替换，放进去会被任何一次设置保存清空。
+- 迁移：首次读到 preset 目录时，把旧的「名字像 review」的推断结果一次性写成 `reviewer` 绑定并写 `employeesMigratedAt`（即使没命中也会写标记，避免改名后旧猜测复活）。
+- 不复制 preset 配置；preset 仍是唯一配置来源。项目维度（`projectId`）已在数据键里预留，界面当前只维护全局行。
 
 ### P4 · 评审卡完成门禁
 
 - 任务详情「🧪 发起评审」：创建只读评审卡，自动带上 `reviewOf`、Reviewer prompt 与只读权限。
-- 任务卡新增可选字段 `reviewOf`（评审卡指向被评审任务）。
+- 评审卡的 preset 取**默认评审员工**（★，否则第一个启用的 reviewer）；没有评审员工时保持部署默认，不阻塞创建。只读是评审卡自身的规则，员工绑定不能把它提到可写。
+- 员工目录里评审员工的按钮是「用它发起评审」：先选一张「执行中/待你验收」的源卡，再打开预填 `reviewOf` 的表单——评审员工不会建出普通卡。
+- 任务卡新增可选字段 `reviewOf`（评审卡指向被评审任务）；看板上评审卡带 `data-role="review"` 便于在同列里区分。
 - 门禁：存在未关闭（非 done/canceled/archived）评审卡时，被评审任务**不能**移到 done；详情页完成按钮置灰，路由侧硬拒。
 - 代理（agent）本来就不能 done；门禁对用户与 API 同时生效。
 
@@ -73,6 +79,10 @@
 | P2 | 失败（无权限/字段不存在） | 移卡仍成功；卡上出现「GitHub 回写失败」host 评论 |
 | P3 | 打开「员工」 | 列出预设；选 Reviewer 预设建卡默认只读 |
 | P4 | 源卡发起评审 → 尝试完成源卡 | 完成禁用/被拒；评审卡完成后放行 |
+| P3 | 员工目录改角色/权限 → 建卡 | 表单按绑定带出权限；改 preset 时未手设的权限跟着变 |
+| P3 | 旧台账首次打开看板 | 名称像 review 的预设被写成 reviewer 绑定，且只写一次 |
+| P4 | 配 ★ 评审员工后发起评审 | 评审卡的 preset 是该员工，权限仍锁只读 |
+| P3 | 卡片无会话 → 点「＋ 开会话」 | 弹层给出可编辑开场正文；发送后卡片进执行中并出现会话 chip |
 | P5 | 未配置 GitHub 连接打开看板 | 六列，列名为内置文案；取消列默认折叠 |
 | P5 | 配置连接后刷新 | 列头变成连接的 `statusMap` 选项名 |
 | 回归 | 原有看板功能 | 未配置 GitHub 时行为与本地上游一致；738 测试通过 |
@@ -102,7 +112,7 @@ node node_modules/tsdown/dist/run.mjs -c tsdown.config.ts
 安装（开发态 link）：
 
 ```sh
-dsh plugin --profile desktop add link:D:/Projects/sourcecode/TraeProjects/dsh-taskboard
+dsh plugin --profile desktop add link:D:/Projects/github/dsh-taskboard
 ```
 
 - host 侧改动需重启 DSH；client 侧重新构建后刷新页面。
@@ -124,6 +134,8 @@ dsh plugin --profile desktop remove dsh-taskboard
 - Project 字段必须是**单选**类型；不支持 iteration/其他字段类型。
 - 看板列固定 6 个；Project 里未被 `statusMap` 覆盖的 Status 选项（本项目是「技术检查」「待合并」「阻塞」）不参与回写，也不会出现在看板上（「阻塞」在看板里是卡片标记而非列）。
 - 评审关系只在创建时指定，编辑不可修改；agent 工具暂不支持创建评审卡。
-- 员工角色目前用预设名称推断只读/可写，未做显式绑定。
+- 员工绑定只影响**之后新建**的任务；已有卡片按各自记录的 preset 与权限执行（可在详情页「执行员工」改派）。
+- 绑定表的项目维度（`projectId`）已在数据键里预留，但界面当前只维护全局行。
+- 会话列表按 `sessionId` 聚合；没有会话 ID 的历史执行记录不会出现在列表里（详情页仍能看到完整执行记录）。
 - 上游兼容性字段仅登记 `0.2.0-rc.2` 与本机 `0.2.1-rc.3`；DSH 升级后需重新构建验证。
 - `dsh-taskboard` 的 worktree 隔离是协作约定而非安全沙箱。
