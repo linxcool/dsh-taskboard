@@ -17,20 +17,28 @@ const MAX_PROJECT_PAGES = 20
 
 /**
  * One page of a ProjectV2 board: each item's issue number and its single-select
- * Status option. `repositoryOwner` covers both users and organizations.
+ * Status option.
+ *
+ * Two GraphQL traps this query has already hit:
+ * - `repositoryOwner` returns the `RepositoryOwner` interface, which has no
+ *   `projectV2` field — the selection MUST go through `... on ProjectV2Owner`.
+ * - GraphQL rejects a declared-but-unused variable, so the status field name is
+ *   NOT a variable; the caller filters field values by name locally.
  */
-const PROJECT_ITEMS_QUERY = `query TaskboardProjectItems($login: String!, $num: Int!, $field: String!, $cursor: String) {
+const PROJECT_ITEMS_QUERY = `query TaskboardProjectItems($login: String!, $num: Int!, $cursor: String) {
   repositoryOwner(login: $login) {
-    projectV2(number: $num) {
-      items(first: 100, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        nodes {
-          content { ... on Issue { number } }
-          fieldValues(first: 50) {
-            nodes {
-              ... on ProjectV2ItemFieldSingleSelectValue {
-                name
-                field { ... on ProjectV2SingleSelectField { name } }
+    ... on ProjectV2Owner {
+      projectV2(number: $num) {
+        items(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            content { ... on Issue { number } }
+            fieldValues(first: 50) {
+              nodes {
+                ... on ProjectV2ItemFieldSingleSelectValue {
+                  name
+                  field { ... on ProjectV2SingleSelectField { name } }
+                }
               }
             }
           }
@@ -114,7 +122,7 @@ export class GithubProvider implements ExternalTaskProvider {
     const field = (this.config.settings.statusField ?? 'Status').trim() || 'Status'
     let cursor: string | undefined
     for (let page = 0; page < MAX_PROJECT_PAGES; page++) {
-      const data = await this.graphql(PROJECT_ITEMS_QUERY, { login: owner, num: projectNumber, field, cursor: cursor ?? null }, signal)
+      const data = await this.graphql(PROJECT_ITEMS_QUERY, { login: owner, num: projectNumber, cursor: cursor ?? null }, signal)
       const ownerNode = data.repositoryOwner as Record<string, unknown> | undefined
       const project = ownerNode?.projectV2 as Record<string, unknown> | undefined
       const items = project?.items as { pageInfo?: { hasNextPage?: unknown; endCursor?: unknown }; nodes?: unknown } | undefined
@@ -192,7 +200,12 @@ export class GithubProvider implements ExternalTaskProvider {
     const items: ExternalItem[] = []
     const seen = new Set<string>()
     // Project Status is fetched once per sync; a failed query degrades to no mapping.
-    const statuses = await this.projectStatuses(signal).catch(() => new Map<number, string>())
+    const statuses = await this.projectStatuses(signal).catch((error: unknown) => {
+      // Degrade instead of failing the whole import, but say so: a silent
+      // fallback hid an invalid Project query for a whole sync round.
+      console.warn('[dsh-taskboard] GitHub Project Status unavailable; importing without status mapping:', error instanceof Error ? error.message : String(error))
+      return new Map<number, string>()
+    })
     const since = this.sinceQuery()
     for (let page = 1; page <= MAX_ISSUE_PAGES; page++) {
       const raw = await this.get(`/repos/${repo}/issues?state=all&per_page=100&sort=updated&direction=desc&page=${page}${since}`, signal)
@@ -226,7 +239,12 @@ export class GithubProvider implements ExternalTaskProvider {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid GitHub issue response')
     const record = raw as Record<string, unknown>
     if (record.pull_request !== undefined) return undefined
-    const statuses = await this.projectStatuses(signal).catch(() => new Map<number, string>())
+    const statuses = await this.projectStatuses(signal).catch((error: unknown) => {
+      // Degrade instead of failing the whole import, but say so: a silent
+      // fallback hid an invalid Project query for a whole sync round.
+      console.warn('[dsh-taskboard] GitHub Project Status unavailable; importing without status mapping:', error instanceof Error ? error.message : String(error))
+      return new Map<number, string>()
+    })
     return this.normalize(projectId, record, statuses)
   }
 

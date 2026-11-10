@@ -53,6 +53,12 @@ describe('GitHub provider', () => {
       paths.push(url.pathname)
       if (url.pathname === '/graphql') {
         expect(String(init?.body)).toContain('ProjectV2ItemFieldSingleSelectValue')
+        // repositoryOwner has no projectV2 field: the selection MUST go through
+        // the ProjectV2Owner fragment or the whole query is invalid.
+        expect(String(init?.body)).toContain('... on ProjectV2Owner')
+        // GraphQL rejects declared-but-unused variables: filtering by field name
+        // happens locally, so the query must not declare $field.
+        expect(String(init?.body)).not.toContain('$field')
         return response({
           data: {
             repositoryOwner: {
