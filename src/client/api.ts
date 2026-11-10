@@ -162,6 +162,8 @@ export interface TaskboardClient {
   updateSettings(body: UpdateSettingsBody): Promise<SettingsResponse>
   /** Replace the employee table (whole-table semantics; lives on the ledger, not in settings). */
   updateEmployees(employees: EmployeeBinding[]): Promise<EmployeeBinding[]>
+  /** The opening user message an execution would send (preview for "open session"). */
+  openingBody(taskId: string): Promise<{ text: string }>
   /** Inspect and validate the host-side data directory. */
   storage(): Promise<StorageStatus>
   checkStorage(directory: string): Promise<StorageStatus>
@@ -216,6 +218,7 @@ export function createClient(): TaskboardClient {
     settings: () => get<SettingsResponse>('/dsh-taskboard/settings'),
     updateSettings: body => post('/dsh-taskboard/settings/update', body),
     updateEmployees: employees => post('/dsh-taskboard/employees', { employees }),
+    openingBody: taskId => get<{ text: string }>(`/dsh-taskboard/tasks/${encodeURIComponent(taskId)}/opening-body`),
     storage: () => get<StorageStatus>('/dsh-taskboard/storage'),
     checkStorage: directory => post<StorageStatus>('/dsh-taskboard/storage/check', { directory }),
     migrateStorage: directory => {

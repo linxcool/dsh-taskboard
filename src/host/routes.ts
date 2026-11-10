@@ -38,6 +38,7 @@ import {
   normalizeModel,
   normalizePrompt,
   normalizeTitle,
+  openingBody,
   pendingReviewers,
   permissionForCreate,
   sanitizeCustomBranchName,
@@ -640,6 +641,16 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
           return
         }
 
+        // The opening user message a human may preview and edit before an
+        // execution (the plugin framing line is NOT part of it).
+        const openingMatch = pathname.match(new RegExp(`^${ROUTE_PREFIX}/tasks/([^/]+)/opening-body$`))
+        if (openingMatch !== null) {
+          const task = store.get(openingMatch[1]!)
+          if (task === undefined) { const f = fail('not_found', 'no such task'); json(res, f.res, f.status); return }
+          json(res, { ok: true, value: { text: openingBody(task) } })
+          return
+        }
+
         const taskMatch = pathname.match(TASK_RE)
         if (taskMatch !== null) {
           const task = store.get(taskMatch[1]!)
@@ -1163,8 +1174,17 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
             }
             // `reuse: true` = 续跑: keep a live worktree/branch as-is instead
             // of resetting to a fresh baseline (0.3.1).
-            const runOptions = body.reuse === true ? { reuseWorktree: true } : undefined
-            const result = await options.run(id, runOptions)
+            // `openingBody` = the GUI's "open session" flow: the human edited
+            // the opening user message, so this run uses it verbatim
+            // (`RunOptions.openingBody`); the framing line stays host-injected.
+            const openingOverride = typeof body.openingBody === 'string' && body.openingBody.trim().length > 0
+              ? body.openingBody
+              : undefined
+            const runOptions = {
+              ...(body.reuse === true ? { reuseWorktree: true } : {}),
+              ...(openingOverride !== undefined ? { openingBody: openingOverride } : {}),
+            }
+            const result = await options.run(id, Object.keys(runOptions).length > 0 ? runOptions : undefined)
             if (result.ok) json(res, { ok: true, value: result }, 202)
             else {
               const f = fail('invalid_input', result.error)

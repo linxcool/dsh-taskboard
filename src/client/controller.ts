@@ -813,10 +813,8 @@ export class BoardController {
     }
   }
 
-  /**
-   * Replace the employee table (whole-table write).
-   *
-   * The table lives on the ledger rather than in settings, so this is its own
+  /** Replace the employee table (whole-table write).
+   *   * The table lives on the ledger rather than in settings, so this is its own
    * route: a board-settings save replaces the whole settings object and would
    * otherwise wipe every employee.
    * @returns whether the write succeeded.
@@ -829,6 +827,23 @@ export class BoardController {
     } catch (error) {
       this.setState({ error: error instanceof Error ? error.message : String(error) })
       return false
+    }
+  }
+
+  /**
+   * The opening user message an execution of this task would send.
+   *
+   * Used by the "open session" composer: the human edits this text and the run
+   * submits the edited body (the plugin framing line is never part of it).
+   * @returns the text, or undefined when the host could not produce it.
+   */
+  async openingBodyFor(taskId: string): Promise<string | undefined> {
+    try {
+      const body = await this.client.openingBody(taskId)
+      return body.text
+    } catch (error) {
+      this.setState({ error: error instanceof Error ? error.message : String(error) })
+      return undefined
     }
   }
 

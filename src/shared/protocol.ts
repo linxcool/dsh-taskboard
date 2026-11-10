@@ -1341,6 +1341,33 @@ export function effectivePrompt(task: TaskRecord): string {
 }
 
 /**
+ * The opening USER message of an execution (the one a human may preview and
+ * edit before starting it).
+ *
+ * An execution submits two messages: the plugin framing line (task id, handoff
+ * protocol, acceptance checklist, isolation notes — host-injected, never
+ * editable) and this body. Both the runner and the preview route call this, so
+ * what the preview shows is exactly what would be sent.
+ *
+ * Placeholders resolved from the task's own history at submit time (valuable
+ * for recurring patrols): `{{lastExecution}}` → the previous execution's
+ * trigger/outcome/error; `{{lastComments}}` → the last three comments.
+ * @param task - the task being executed.
+ */
+export function openingBody(task: TaskRecord): string {
+  const lastExec = [...task.executions].reverse().find(e => e.outcome !== 'running')
+  const lastExecText = lastExec === undefined
+    ? '（无）'
+    : `${lastExec.trigger} · ${lastExec.outcome}${lastExec.error !== undefined ? ` · ${lastExec.error.slice(0, 200)}` : ''} · ${lastExec.startedAt !== undefined ? new Date(lastExec.startedAt).toISOString() : '?'}`
+  const lastCommentsText = task.comments.slice(-3)
+    .map(c => `[${c.threadId !== undefined ? 'agent' : 'user'}] ${c.body}`)
+    .join('\n') || '（无）'
+  return effectivePrompt(task)
+    .replace(/\{\{lastExecution\}\}/g, lastExecText)
+    .replace(/\{\{lastComments\}\}/g, lastCommentsText)
+}
+
+/**
  * Whether the task is currently claimed by a session (running state).
  * @param task - the task.
  */

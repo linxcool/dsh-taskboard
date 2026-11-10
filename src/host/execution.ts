@@ -19,6 +19,7 @@ import {
   effectiveIsolation,
   DEFAULT_MAX_CONCURRENT,
   effectivePrompt,
+  openingBody,
   isSpentOneShot,
   newCommentId,
   newExecutionId,
@@ -221,6 +222,13 @@ export interface RunOptions {
    * written (append-only ledger), so the snapshot cannot go stale.
    */
   comments?: Array<{ id: string; body: string }>
+  /**
+   * Override for the opening user body (`openingBody(task)` is the default).
+   * The GUI's "open session" flow previews that text, lets the human edit it,
+   * and passes the result here — the plugin framing line is unaffected and the
+   * task's own `prompt` field is never rewritten.
+   */
+  openingBody?: string
 }
 
 /** One live execution tracked for settlement and cancellation. */
@@ -880,7 +888,7 @@ export class ExecutionService {
       handle.agent.followup({
         id: this.deps.mintMessageId?.() ?? MessageId(`msg-taskboard-${crypto.randomUUID()}`),
         role: 'user' as const,
-        content: [{ type: 'text' as const, text: this.userBody(task) }],
+        content: [{ type: 'text' as const, text: options?.openingBody ?? openingBody(task) }],
         source: { kind: 'user' as const },
       })
     }
@@ -1455,25 +1463,10 @@ export class ExecutionService {
   }
 
   /**
-   * The card body as a normal user bubble: the effective prompt (title+
-   * description, with the explicit prompt appended when set) with template
-   * variables resolved from
-   * the task's own history at submit time (valuable for recurring patrols):
-   * `{{lastExecution}}` → the previous execution's trigger/outcome/error;
-   * `{{lastComments}}` → the last three comments (who + body).
+   * The card body as a normal user bubble is `openingBody()` from shared — the
+   * same function the GUI previews before starting an execution, so what a
+   * human edits is exactly what the session receives.
    */
-  private userBody(task: TaskRecord): string {
-    const lastExec = [...task.executions].reverse().find(e => e.outcome !== 'running')
-    const lastExecText = lastExec === undefined
-      ? '（无）'
-      : `${lastExec.trigger} · ${lastExec.outcome}${lastExec.error !== undefined ? ` · ${lastExec.error.slice(0, 200)}` : ''} · ${lastExec.startedAt !== undefined ? new Date(lastExec.startedAt).toISOString() : '?'}`
-    const lastCommentsText = task.comments.slice(-3)
-      .map(c => `[${c.threadId !== undefined ? 'agent' : 'user'}] ${c.body}`)
-      .join('\n') || '（无）'
-    return effectivePrompt(task)
-      .replace(/\{\{lastExecution\}\}/g, lastExecText)
-      .replace(/\{\{lastComments\}\}/g, lastCommentsText)
-  }
 
   /** Move a task back out of in_progress (and release its hold) after a failed start. */
   private async revertProgress(taskId: string): Promise<void> {

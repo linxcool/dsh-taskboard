@@ -35,7 +35,7 @@ let templates: InstanceType<typeof TemplateStore>
 let cancelCalls: string[]
 /** Mutable queue-clear hook target (tests reassign the behavior). */
 let clearQueueImpl: () => Promise<number> = async () => 0
-let runCalls: Array<{ id: string; runOptions?: { reuseWorktree?: boolean } }>
+let runCalls: Array<{ id: string; runOptions?: { reuseWorktree?: boolean; openingBody?: string } }>
 /** Mutable comment-wake hook target + call log (issue #51 Plan A tests). */
 let commentRunCalls: string[]
 let commentRunImpl: (id: string) => Promise<{ ok: true; delivered: 'live' | 'run'; count: number; executionId?: string; sessionId?: string } | { ok: false; error: string }> = async () => ({ ok: false, error: '没有待投递的留言' })
@@ -1456,6 +1456,29 @@ describe('taskboard routes 0.5.0 (board settings → default isolation)', () => 
 
     const badShape = await post('/dsh-taskboard/employees', { employees: 'nope' })
     expect(badShape.status).toBe(400)
+  })
+
+  it('previews the opening body and runs with an edited one', async () => {
+    const created = await post('/dsh-taskboard/tasks', { title: '会话正文', description: '描述', prompt: '提示', workspaceId: 'ws-a', urgency: 'normal' })
+    const id = created.json.value.id as string
+
+    const preview = await (await fetch(`${base}/dsh-taskboard/tasks/${id}/opening-body`)).json()
+    expect(preview.value.text).toContain('会话正文')
+    expect(preview.value.text).toContain('描述')
+    expect(preview.value.text).toContain('提示')
+    // The framing line is injected by the host, never part of the editable body.
+    expect(preview.value.text).not.toContain('【任务看板】')
+
+    runCalls.length = 0
+    const ran = await post(`/dsh-taskboard/tasks/${id}/run`, { openingBody: '我改过的正文' })
+    expect(ran.status).toBe(202)
+    expect(runCalls.at(-1)?.runOptions).toEqual({ openingBody: '我改过的正文' })
+    // Editing the opening message never rewrites the card.
+    expect(store.get(id)!.prompt).toBe('提示')
+
+    runCalls.length = 0
+    await post(`/dsh-taskboard/tasks/${id}/run`, {})
+    expect(runCalls.at(-1)?.runOptions).toBeUndefined()
   })
 
   it('migrates the legacy reviewer inference once, from the model catalog', async () => {
