@@ -12,7 +12,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { BoardController } from '../controller.ts'
 import type { TaskTemplateSpec } from '../../shared/api.ts'
 import type { ChecklistItem, IsolationMode, PermissionMode, PeriodicCompletion, TaskRecord, Urgency } from '../../shared/protocol.ts'
-import { MAX_CHECKLIST_ITEMS, asPermission, branchNameModeOf, branchNamePrefixOf, buildBranchName, defaultIsolationOf, defaultPermissionOf, nextCronTime, parseCron } from '../../shared/protocol.ts'
+import { MAX_CHECKLIST_ITEMS, asPermission, branchNameModeOf, branchNamePrefixOf, buildBranchName, defaultIsolationOf, defaultPermissionOf, employeeBindingFor, nextCronTime, parseCron, permissionForCreate } from '../../shared/protocol.ts'
 import { fmtTime, initialWorkspaceId } from './format.ts'
 import { useT, type Translate } from '../i18n/runtime.ts'
 import { SlashPromptInput } from './SlashPromptInput.tsx'
@@ -247,8 +247,15 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
       && candidate.status !== 'backlog' && candidate.status !== 'todo'
       && candidate.id !== editingTaskId)
   // Permission preset (0.5.5): 'workspace-write' (default) | 'read-only' | 'danger-full-access'
+  // P3 v2: until the human picks one, the value FOLLOWS the employee binding of
+  // the selected preset (same priority the host applies: explicit > binding >
+  // board default), so the form and the created card cannot disagree.
   const [permission, setPermission] = useState<PermissionMode>(
-    task?.permission ?? (prefill?.permission ? asPermission(prefill.permission) : defaultPermissionOf(state.ledger.settings)),
+    task?.permission ?? (prefill?.permission ? asPermission(prefill.permission) : permissionForCreate(state.ledger, initialPreset.trim() || undefined)),
+  )
+  // Explicit choice stops the follow (and the source line says so).
+  const [permissionTouched, setPermissionTouched] = useState(
+    task?.permission !== undefined || prefill?.permission !== undefined,
   )
   // Isolation toggle: create mode starts from the board setting (0.5.0
   // 看板设置 → 默认执行隔离) or the template's choice; edit mode starts from
@@ -313,6 +320,14 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
     }).finally(() => { if (active) setSessionsLoading(false) })
     return () => { active = false }
   }, [controller, workspaceId])
+
+  // P3 v2: while the human has not picked a permission, the value follows the
+  // employee binding of whichever preset is selected (the host applies the
+  // same priority when the form leaves it implicit).
+  useEffect(() => {
+    if (permissionTouched) return
+    setPermission(permissionForCreate(state.ledger, presetId.trim() || undefined))
+  }, [presetId, permissionTouched, state.ledger])
 
   // Preset roster: query runtime or fallback to host API; pre-select the deployment default in
   // create mode (unless a template pinned one) so executions run with a
@@ -669,11 +684,22 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
 
             <div className="dsh-atb-form-subgrid">
               <Field label={t('form.field.permission')}>
-                <select className="dsh-atb-permission-select" value={permission} onChange={e => setPermission(asPermission(e.target.value))}>
+                <select
+                  className="dsh-atb-permission-select"
+                  value={permission}
+                  onChange={e => { setPermissionTouched(true); setPermission(asPermission(e.target.value)) }}
+                >
                   {permissionOptions(t).map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.icon} {opt.label}{opt.value === 'workspace-write' ? t('form.perm.defaultTag') : ''}</option>
                   ))}
                 </select>
+                <span className="dsh-atb-perm-source" data-kind={permissionTouched ? 'override' : 'follow'}>
+                  {permissionTouched
+                    ? t('form.permission.overrideNote')
+                    : employeeBindingFor(state.ledger, presetId.trim() || undefined)?.permission !== undefined
+                      ? t('form.permission.sourceBinding')
+                      : t('form.permission.sourceBoard')}
+                </span>
               </Field>
               <Field label={t('form.field.urgency')}>
                 <select className="dsh-atb-urgency-select" value={urgency} onChange={e => setUrgency(e.target.value as Urgency)}>
@@ -697,6 +723,7 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
                   <span className="dsh-atb-mode-hint">{t('form.mode.periodicHint')}</span>
                 </button>
               </div>
+              <p className="dsh-atb-form-hint" data-kind="run-now">{t('form.runNowHint')}</p>
             </Field>
 
             {mode === 'once' && (
@@ -878,7 +905,7 @@ export function TaskFormModal({ controller, task }: { controller: BoardControlle
               type="button"
               className="dsh-atb-btn"
               disabled={!valid || runBlocked || busy || imageUploading}
-              title={runBlocked ? t('form.action.runBlockedTitle') : busy || imageUploading ? t('form.action.runBusyTitle') : t('form.action.runTitle')}
+              title={runBlocked ? t('form.action.runBlockedTitle') : busy || imageUploading ? t('form.action.runBusyTitle') : `${t('form.action.runTitle')} — ${t('form.runNowHint')}`}
               onClick={submitAndRun}
             >
               {t('form.action.run')}

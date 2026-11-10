@@ -641,6 +641,11 @@ span.dsh-atb-comment-delivered { cursor: default; }
   border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); color: var(--dsw-alias-label-secondary, gray);
 }
 
+/* Form: where the effective permission comes from, and the run-now caveat. */
+.dsh-atb-perm-source { display: block; margin-top: 3px; font-size: 11px; color: var(--dsw-alias-label-secondary, gray); }
+.dsh-atb-perm-source[data-kind="override"] { color: #b45309; }
+.dsh-atb-form-hint { margin: 6px 0 0; font-size: 11.5px; color: var(--dsw-alias-label-secondary, gray); }
+
 /* Employee catalog v2: four states, inline role/permission editing. */
 .dsh-atb-employee[data-state="disabled"] { opacity: .62; }
 .dsh-atb-employee[data-state="stale"] { border-style: dashed; opacity: .8; }
@@ -676,8 +681,7 @@ span.dsh-atb-comment-delivered { cursor: default; }
 }
 .dsh-atb-emp-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .dsh-atb-emp-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--dsw-alias-label-secondary, gray); }
-.dsh-atb-emp-sources { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
-.dsh-atb-emp-source {
+.dsh-atb-emp-sources { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }.dsh-atb-emp-source {
   font: inherit; font-size: 11.5px; text-align: left; cursor: pointer; padding: 3px 6px;
   border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3));
   background: transparent; color: var(--dsw-alias-label-primary, inherit);

@@ -644,6 +644,15 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
   const [idCopyState, setIdCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const idCopyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(idCopyTimer.current), [])
+  // Preset roster for the "executing employee" picker (P3 v2).
+  const [presets, setPresets] = useState<Array<{ id: string; name?: string }>>([])
+  useEffect(() => {
+    let active = true
+    void controller.fetchPresetCatalog()
+      .then(roster => { if (active) setPresets(roster.presets) })
+      .catch(() => { /* no roster → the picker just shows the current id */ })
+    return () => { active = false }
+  }, [controller])
   const copyTaskId = (): void => {
     void Promise.resolve().then(() => navigator.clipboard.writeText(task.id)).then(() => {
       setIdCopyState('copied')
@@ -761,6 +770,26 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
               </Chip>
             )}
             {task.presetId !== undefined && <Chip icon="🎛" >{task.presetId}</Chip>}
+            {/* P3 v2: the executing employee is editable here — imported and
+                existing cards had no other way to be assigned one. */}
+            <label className="dsh-atb-emp-pick" title={t('detail.employee.title')}>
+              <span>{t('detail.employee.label')}</span>
+              <select
+                value={task.presetId ?? ''}
+                onChange={event => {
+                  const next = event.target.value
+                  void controller.update(task.id, task.version, { presetId: next === '' ? null : next })
+                }}
+              >
+                <option value="">{t('detail.employee.unassigned')}</option>
+                {task.presetId !== undefined && !presets.some(preset => preset.id === task.presetId) && (
+                  <option value={task.presetId}>{task.presetId}</option>
+                )}
+                {presets.map(preset => (
+                  <option key={preset.id} value={preset.id}>{preset.name ?? preset.id}</option>
+                ))}
+              </select>
+            </label>
             {task.reviewOf !== undefined && (
               <Chip icon="🧪" title={t('form.reviewOf.title')}>{t('detail.reviewOf', { title: reviewTarget?.title ?? task.reviewOf })}</Chip>
             )}
