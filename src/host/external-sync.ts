@@ -244,7 +244,12 @@ export class ExternalSyncService {
             if (task?.status === 'archived') { result.unchanged++; continue }
             const source: ExternalSource = { connectionId: config.id, provider: config.provider, providerName: this.registry.get(config.provider).descriptor.name, item, syncedAt: result.at, conflicts: [] }
             if (!task) {
-              if (item.closed || !(item.assignees ?? [item.assignedTo]).includes(config.account)) continue
+              // "Sync this account's work": an item assigned to someone else is
+              // not ours, but an UNASSIGNED item (the norm for GitHub issues) is
+              // nobody's yet — dropping it made a repo with no assignees import
+              // nothing at all.
+              const assignees = (item.assignees ?? [item.assignedTo]).filter(login => login.length > 0)
+              if (item.closed || (assignees.length > 0 && !assignees.includes(config.account))) continue
               const created: TaskRecord = { id: newTaskId(), title: item.title, description: item.description, urgency: item.urgency,
                 workspaceId, prompt: '', status: config.importStatus ?? 'backlog', blocked: false, execution: { mode: 'claim' },
                 isolation: defaultIsolationOf(ledger.settings), permission: defaultPermissionOf(ledger.settings),

@@ -58,6 +58,18 @@ describe('sync service', () => {
     expect((await f.service.status()).config!.importStatus).toBe('todo')
     f.service.dispose()
   })
+  it('imports unassigned items but still skips ones assigned to someone else', async () => {
+    const f = await fixture()
+    f.set([
+      { ...item, id: 'no-assignee', assignedTo: '', assignees: [] },
+      { ...item, id: 'someone-else', assignedTo: 'bob', assignees: ['bob'] },
+      { ...item, id: 'mine', assignedTo: 'alice', assignees: ['alice'] },
+    ])
+    const result = await f.service.sync()
+    expect(result.created).toBe(2)
+    expect(f.store.snapshot().tasks.map(t => t.external?.item.id).sort()).toEqual(['mine', 'no-assignee'])
+    f.service.dispose()
+  })
   it('is idempotent and creates non-executing backlog tasks', async () => {
     const f = await fixture()
     expect((await f.service.sync()).created).toBe(1)
