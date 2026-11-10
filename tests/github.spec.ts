@@ -66,9 +66,11 @@ describe('GitHub provider', () => {
                 items: {
                   pageInfo: { hasNextPage: false, endCursor: null },
                   nodes: [
-                    { content: { number: 7 }, fieldValues: { nodes: [{ name: '执行中', field: { name: 'Status' } }] } },
-                    { content: { number: 8 }, fieldValues: { nodes: [{ name: '待澄清', field: { name: 'Status' } }] } },
-                    { content: { number: 9 }, fieldValues: { nodes: [] } },
+                    { content: { number: 7, repository: { nameWithOwner: 'acme/repo' } }, fieldValues: { nodes: [{ name: '执行中', field: { name: 'Status' } }] } },
+                    // Same issue number in ANOTHER repository: its status must not leak.
+                    { content: { number: 7, repository: { nameWithOwner: 'other/repo' } }, fieldValues: { nodes: [{ name: '完成', field: { name: 'Status' } }] } },
+                    { content: { number: 8, repository: { nameWithOwner: 'acme/repo' } }, fieldValues: { nodes: [{ name: '待澄清', field: { name: 'Status' } }] } },
+                    { content: { number: 9, repository: { nameWithOwner: 'acme/repo' } }, fieldValues: { nodes: [] } },
                   ],
                 },
               },

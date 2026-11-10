@@ -32,7 +32,7 @@ const PROJECT_ITEMS_QUERY = `query TaskboardProjectItems($login: String!, $num: 
         items(first: 100, after: $cursor) {
           pageInfo { hasNextPage endCursor }
           nodes {
-            content { ... on Issue { number } }
+            content { ... on Issue { number repository { nameWithOwner } } }
             fieldValues(first: 50) {
               nodes {
                 ... on ProjectV2ItemFieldSingleSelectValue {
@@ -108,14 +108,19 @@ export class GithubProvider implements ExternalTaskProvider {
   }
 
   /**
-   * issue number → Project Status option name for the configured board.
+   * `owner/repo#number` → Project Status option name for the configured board.
+   *
+   * The key MUST carry the repository: one Project can hold items from several
+   * repositories, and issue numbers collide across them (`hdefense#11` vs
+   * `cloudflare#11`). Keying by number alone applied another repo's status to
+   * the card.
    *
    * One paginated query for the whole project instead of a lookup per issue.
    * Empty when no project is configured, and a failed query degrades to empty
    * (a token without the `project` scope must not break issue import).
    */
-  private async projectStatuses(signal: AbortSignal): Promise<ReadonlyMap<number, string>> {
-    const statuses = new Map<number, string>()
+  private async projectStatuses(signal: AbortSignal): Promise<ReadonlyMap<string, string>> {
+    const statuses = new Map<string, string>()
     const owner = (this.config.settings.projectOwner ?? '').trim()
     const projectNumber = Number(this.config.settings.projectNumber ?? '')
     if (owner.length === 0 || !Number.isSafeInteger(projectNumber) || projectNumber <= 0) return statuses
@@ -129,15 +134,19 @@ export class GithubProvider implements ExternalTaskProvider {
       const nodes = Array.isArray(items?.nodes) ? items.nodes : []
       for (const node of nodes) {
         if (!node || typeof node !== 'object') continue
-        const entry = node as { content?: { number?: unknown }; fieldValues?: { nodes?: unknown } }
+        const entry = node as { content?: { number?: unknown; repository?: { nameWithOwner?: unknown } }; fieldValues?: { nodes?: unknown } }
         const number = entry.content?.number
+        const repo = entry.content?.repository?.nameWithOwner
         if (typeof number !== 'number' || !Number.isSafeInteger(number)) continue
+        if (typeof repo !== 'string' || repo.length === 0) continue
         const values = Array.isArray(entry.fieldValues?.nodes) ? entry.fieldValues.nodes : []
         for (const value of values) {
           if (!value || typeof value !== 'object') continue
           const fieldValue = value as { name?: unknown; field?: { name?: unknown } }
           if (fieldValue.field?.name !== field) continue
-          if (typeof fieldValue.name === 'string' && fieldValue.name.length > 0) statuses.set(number, fieldValue.name)
+          if (typeof fieldValue.name === 'string' && fieldValue.name.length > 0) {
+            statuses.set(`${repo}#${number}`, fieldValue.name)
+          }
         }
       }
       const hasNext = items?.pageInfo?.hasNextPage === true
@@ -204,7 +213,7 @@ export class GithubProvider implements ExternalTaskProvider {
       // Degrade instead of failing the whole import, but say so: a silent
       // fallback hid an invalid Project query for a whole sync round.
       console.warn('[dsh-taskboard] GitHub Project Status unavailable; importing without status mapping:', error instanceof Error ? error.message : String(error))
-      return new Map<number, string>()
+      return new Map<string, string>()
     })
     const since = this.sinceQuery()
     for (let page = 1; page <= MAX_ISSUE_PAGES; page++) {
@@ -243,7 +252,7 @@ export class GithubProvider implements ExternalTaskProvider {
       // Degrade instead of failing the whole import, but say so: a silent
       // fallback hid an invalid Project query for a whole sync round.
       console.warn('[dsh-taskboard] GitHub Project Status unavailable; importing without status mapping:', error instanceof Error ? error.message : String(error))
-      return new Map<number, string>()
+      return new Map<string, string>()
     })
     return this.normalize(projectId, record, statuses)
   }
@@ -255,7 +264,7 @@ export class GithubProvider implements ExternalTaskProvider {
     return `&since=${encodeURIComponent(`${since}T00:00:00Z`)}`
   }
 
-  private normalize(projectId: string, raw: Record<string, unknown>, statuses?: ReadonlyMap<number, string>): ExternalItem {
+  private normalize(projectId: string, raw: Record<string, unknown>, statuses?: ReadonlyMap<string, string>): ExternalItem {
     const number = raw.number
     if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) throw new Error('invalid GitHub issue number')
     const title = raw.title
@@ -273,7 +282,7 @@ export class GithubProvider implements ExternalTaskProvider {
       projectId, type: 'issue', id: String(number), title: title.trim(), description: body,
       priority: labels.join(','), status: state, assignedTo: this.login(raw.assignee) ?? assignees[0] ?? '',
       assignees, closed: state === 'closed', urgency, url,
-      ...(statuses?.has(number) === true ? { projectStatus: statuses.get(number)! } : {}),
+      ...(statuses?.has(`${projectId}#${number}`) === true ? { projectStatus: statuses.get(`${projectId}#${number}`)! } : {}),
     }
   }
 
