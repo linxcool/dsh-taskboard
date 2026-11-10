@@ -352,6 +352,7 @@ export const zh = {
   'detail.employee.title': '选择执行这张卡的员工（Agent 预设）；导入卡与存量卡也在这里分配',
   'detail.employee.unassigned': '未分配（跟随部署默认）',
   'detail.reviewOf': '评审：{title}',
+  'detail.review.employee': '这张评审卡由该员工执行',
   'detail.reviewOpen': '{n} 张评审卡未完成',
   'detail.review.action': '🧪 发起评审',
   'detail.review.actionTitle': '创建一张只读评审卡；评审关闭前本任务不能标记完成',

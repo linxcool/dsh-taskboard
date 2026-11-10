@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ExternalSourcePanel } from './ExternalSourcePanel.tsx'
 import type { BoardController } from '../controller.ts'
 import type { CommentRecord, ExecutionRecord, TaskRecord } from '../../shared/protocol.ts'
-import { canTransition, checklistProgress, pendingReviewers, taskAssociatedSessionIds, taskSessionId } from '../../shared/protocol.ts'
+import { canTransition, checklistProgress, defaultReviewerBinding, pendingReviewers, taskAssociatedSessionIds, taskSessionId } from '../../shared/protocol.ts'
 import { useAlert } from './AlertModal.tsx'
 import { checkNeedsHuman, fmtTime, isStaleClaim } from './format.ts'
 import { MOVE_KEYS, OUTCOME_KEYS, STATUS_KEYS, URGENCY_KEYS } from './labels.ts'
@@ -684,6 +684,9 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
   const archiveResult = archiveState.sessionArchive?.taskId === task.id ? archiveState.sessionArchive.result : undefined
   const reviewTarget = task.reviewOf === undefined ? undefined : archiveState.ledger.tasks.find(candidate => candidate.id === task.reviewOf)
   const openReviews = pendingReviewers(archiveState.ledger.tasks, task.id)
+  // Who creates the review card: the starred reviewer, else the first enabled
+  // one. Absent → the card follows the deployment default (unchanged behavior).
+  const defaultReviewer = defaultReviewerBinding(archiveState.ledger)
   const isReviewOrDone = task.status === 'in_review' || task.status === 'done'
   const hasReport = task.executions.some(e => e.report !== undefined)
   // Issue #51 Plan A: pending = user comments not yet delivered to the
@@ -793,6 +796,11 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
             {task.reviewOf !== undefined && (
               <Chip icon="🧪" title={t('form.reviewOf.title')}>{t('detail.reviewOf', { title: reviewTarget?.title ?? task.reviewOf })}</Chip>
             )}
+            {task.reviewOf !== undefined && task.presetId !== undefined && (
+              <Chip icon="👤" title={t('detail.review.employee')}>
+                {presets.find(preset => preset.id === task.presetId)?.name ?? task.presetId}
+              </Chip>
+            )}
             {openReviews.length > 0 && (
               <Chip icon="🧪" tone="urgent">{t('detail.reviewOpen', { n: openReviews.length })}</Chip>
             )}
@@ -888,7 +896,11 @@ export function TaskDetail({ task, controller, now }: { task: TaskRecord; contro
                 description: t('detail.review.description', { title: task.title }),
                 prompt: t('detail.review.prompt', { title: task.title }),
                 urgency: task.urgency,
+                // Read-only is the review card's own rule (a binding can never
+                // raise it); the PRESET comes from the default reviewer so the
+                // card runs as the employee who is supposed to review.
                 permission: 'read-only',
+                ...(defaultReviewer !== undefined ? { presetId: defaultReviewer.presetId } : {}),
                 reviewOf: task.id,
               })}
             >

@@ -18,10 +18,10 @@ function task(extra: Partial<TaskRecord> = {}): TaskRecord {
     urgency: 'normal', status: 'todo', blocked: true, execution: { mode: 'claim' }, version: 1,
     createdAt: 1, updatedAt: 1, createdBy: { kind: 'user' }, updatedBy: { kind: 'user' }, comments: [], executions: [], ...extra }
 }
-async function mount(tasks: TaskRecord[], view: 'board' | 'detail' | 'card') {
+async function mount(tasks: TaskRecord[], view: 'board' | 'detail' | 'card', employees?: unknown[]) {
   const updates: Array<Record<string, unknown>> = []
   const controller = new BoardController({
-    state: async () => ({ schemaVersion: 1, revision: 1, tasks }),
+    state: async () => ({ schemaVersion: 1, revision: 1, tasks, ...(employees !== undefined ? { employees } : {}) }),
     workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
     stream: () => () => {},
     update: async (_id: string, body: Record<string, unknown>) => { updates.push(body); return { id: tasks[0]!.id } },
@@ -103,6 +103,45 @@ describe('human waiting and delivery review UI', () => {
     const review = task({ id: 't-rev', title: '评审登录', status: 'todo', reviewOf: 't-src' })
     const { host } = await mount([review, source], 'detail')
     expect(host.textContent).toContain('评审：实现登录')
+  })
+
+  it('P3 v2: opens the review card for the default reviewer', async () => {
+    const source = task({ id: 't-src', title: '实现登录', status: 'in_review' })
+    const { host, controller } = await mount([source], 'detail', [
+      { presetId: 'reviewers', role: 'reviewer', enabled: true, defaultReviewer: true },
+      { presetId: 'other', role: 'reviewer', enabled: true },
+    ])
+    const action = [...host.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('发起评审'))!
+    action.click()
+    await waitFor(() => controller.getSnapshot().composerOpen)
+    expect(controller.getSnapshot().templatePrefill).toMatchObject({
+      reviewOf: 't-src',
+      permission: 'read-only',
+      presetId: 'reviewers',
+    })
+  })
+
+  it('P3 v2: leaves the preset unset when no reviewer is bound', async () => {
+    const source = task({ id: 't-src', title: '实现登录', status: 'in_review' })
+    const { host, controller } = await mount([source], 'detail', [
+      { presetId: 'makers', role: 'maker', enabled: true },
+    ])
+    const action = [...host.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('发起评审'))!
+    action.click()
+    await waitFor(() => controller.getSnapshot().composerOpen)
+    expect(controller.getSnapshot().templatePrefill).toMatchObject({ reviewOf: 't-src', permission: 'read-only' })
+    expect(controller.getSnapshot().templatePrefill).not.toHaveProperty('presetId')
+  })
+
+  it('P3 v2: marks review cards on the board', async () => {
+    const plain = task({ id: 't-plain', title: '普通卡', status: 'todo' })
+    const review = task({ id: 't-rev', title: '评审卡', status: 'todo', reviewOf: 't-src' })
+    const { host } = await mount([plain, review], 'board')
+    const cards = [...host.querySelectorAll<HTMLElement>('.dsh-atb-card')]
+    const reviewCard = cards.find(card => card.textContent?.includes('评审卡'))!
+    const plainCard = cards.find(card => card.textContent?.includes('普通卡'))!
+    expect(reviewCard.dataset.role).toBe('review')
+    expect(plainCard.dataset.role).toBeUndefined()
   })
 
   it('shows clipboard failure and allows selecting the path', async () => {    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })

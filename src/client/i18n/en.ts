@@ -350,6 +350,7 @@ export const en: TaskboardDict = {
   'detail.employee.title': 'Pick the employee (agent preset) that executes this card; imported and existing cards are assigned here too',
   'detail.employee.unassigned': 'Unassigned (deployment default)',
   'detail.reviewOf': 'Reviews: {title}',
+  'detail.review.employee': 'This review card runs as that employee',
   'detail.reviewOpen': '{n} review card(s) still open',
   'detail.review.action': '🧪 Request review',
   'detail.review.actionTitle': 'Create a read-only review card; this task cannot be completed until it is closed.',

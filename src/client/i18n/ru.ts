@@ -352,6 +352,7 @@ export const ru: TaskboardDict = {
   'detail.employee.title': 'Выберите сотрудника (пресет агента), который выполняет карточку; здесь же назначаются импортированные карточки',
   'detail.employee.unassigned': 'Не назначено (по умолчанию)',
   'detail.reviewOf': 'Ревью: {title}',
+  'detail.review.employee': 'Эту карточку ревью выполняет этот сотрудник',
   'detail.reviewOpen': 'Открытых карточек ревью: {n}',
   'detail.review.action': '🧪 Запросить ревью',
   'detail.review.actionTitle': 'Создать карточку ревью только для чтения; задачу нельзя завершить, пока она не закрыта.',

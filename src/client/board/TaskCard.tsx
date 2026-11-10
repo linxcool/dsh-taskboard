@@ -130,6 +130,7 @@ export function TaskCard({ task, controller, draggable = false, now, onAlert }: 
       role="button"
       tabIndex={0}
       className="dsh-atb-card"
+      data-role={task.reviewOf !== undefined ? 'review' : undefined}
       data-urgency={task.urgency}
       data-needs-human={needsHuman.needs ? 'true' : undefined}
       draggable={draggable && !rejectOpen}
