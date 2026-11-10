@@ -9,7 +9,7 @@ import type { SessionArchiveResult } from '../shared/api.ts'
  * @module dsh-taskboard/client/controller
  */
 import type { AttachmentUpload, ChangeEvent, DiagnosticsResponse, QueueClearResponse, QueueSummary, DiffResponse, ImportCommitResponse, ImportPreviewResponse, MergeRepoResult, PromptCompletionsResponse, StorageStatus, TaskTemplate, TaskTemplateSpec, UpdateTaskBody, WorkspaceView } from '../shared/api.ts'
-import type { ChecklistItem, TaskLedger, TaskRecord, TaskStatus, Urgency } from '../shared/protocol.ts'
+import type { ChecklistItem, EmployeeBinding, TaskLedger, TaskRecord, TaskStatus, Urgency } from '../shared/protocol.ts'
 import { MAIN_STATUSES, emptyLedger } from '../shared/protocol.ts'
 import type { TaskboardClient } from './api.ts'
 import type { SessionJumpResult } from './session-jump.ts'
@@ -805,6 +805,25 @@ export class BoardController {
   async updateSettings(body: Parameters<TaskboardClient['updateSettings']>[0]): Promise<boolean> {
     try {
       await this.client.updateSettings(body)
+      await this.refresh()
+      return true
+    } catch (error) {
+      this.setState({ error: error instanceof Error ? error.message : String(error) })
+      return false
+    }
+  }
+
+  /**
+   * Replace the employee table (whole-table write).
+   *
+   * The table lives on the ledger rather than in settings, so this is its own
+   * route: a board-settings save replaces the whole settings object and would
+   * otherwise wipe every employee.
+   * @returns whether the write succeeded.
+   */
+  async saveBindings(employees: EmployeeBinding[]): Promise<boolean> {
+    try {
+      await this.client.updateEmployees(employees)
       await this.refresh()
       return true
     } catch (error) {

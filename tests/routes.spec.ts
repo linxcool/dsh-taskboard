@@ -1422,6 +1422,42 @@ describe('taskboard routes 0.5.0 (board settings → default isolation)', () => 
     expect(state.value.settings).toEqual({ defaultIsolation: 'worktree', maxConcurrent: 8, scheduleMissedAfterMinutes: 15 })
   })
 
+  it('replaces the employee table without touching settings', async () => {
+    const settings = await post('/dsh-taskboard/settings/update', { maxConcurrent: 5 })
+    expect(settings.status).toBe(200)
+
+    const saved = await post('/dsh-taskboard/employees', {
+      employees: [
+        { presetId: 'std', role: 'maker', enabled: true, permission: 'read-only' },
+        { presetId: 'rev', role: 'reviewer', enabled: true, defaultReviewer: true },
+      ],
+    })
+    expect(saved.status).toBe(200)
+    expect(saved.json.value).toEqual([
+      { presetId: 'std', role: 'maker', permission: 'read-only', enabled: true },
+      { presetId: 'rev', role: 'reviewer', enabled: true, defaultReviewer: true },
+    ])
+    expect(store.snapshot().employees).toEqual(saved.json.value)
+    // The whole-object settings write must not have been the way this table
+    // is stored: settings survive independently.
+    expect(store.snapshot().settings?.maxConcurrent).toBe(5)
+
+    // Replacing with fewer rows drops the missing ones; an empty table clears it.
+    await post('/dsh-taskboard/employees', { employees: [{ presetId: 'rev', role: 'reviewer', enabled: true }] })
+    expect(store.snapshot().employees).toHaveLength(1)
+    await post('/dsh-taskboard/employees', { employees: [] })
+    expect(store.snapshot().employees).toEqual([])
+  })
+
+  it('rejects an invalid employee role and a non-array table', async () => {
+    const badRole = await post('/dsh-taskboard/employees', { employees: [{ presetId: 'x', role: 'boss', enabled: true }] })
+    expect(badRole.status).toBe(400)
+    expect(badRole.json.error.code).toBe('invalid_input')
+
+    const badShape = await post('/dsh-taskboard/employees', { employees: 'nope' })
+    expect(badShape.status).toBe(400)
+  })
+
   it('materializes model/effort/preset defaults, honors overrides and null, and leaves existing tasks unchanged', async () => {
     const defaultModel = { provider: 'prov-a', model: 'model-a', reasoningEffort: 'high' }
     const saved = await post('/dsh-taskboard/settings/update', { defaultModel, defaultPresetId: ' standard ' })

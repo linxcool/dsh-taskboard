@@ -38,7 +38,7 @@ import type {
   WorktreeRemoveBody,
   WorkspaceView,
 } from '../shared/api.ts'
-import type { CommentRecord, TaskSummary } from '../shared/protocol.ts'
+import type { CommentRecord, EmployeeBinding, TaskSummary } from '../shared/protocol.ts'
 
 /** Unwrap the envelope while keeping transport and payload failures distinct. */
 async function unwrap<T>(pending: Response | Promise<Response>, path: string, signal?: AbortSignal): Promise<T> {
@@ -160,6 +160,8 @@ export interface TaskboardClient {
   settings(): Promise<SettingsResponse>
   /** Replace board settings (whole-object semantics; affects new tasks only). */
   updateSettings(body: UpdateSettingsBody): Promise<SettingsResponse>
+  /** Replace the employee table (whole-table semantics; lives on the ledger, not in settings). */
+  updateEmployees(employees: EmployeeBinding[]): Promise<EmployeeBinding[]>
   /** Inspect and validate the host-side data directory. */
   storage(): Promise<StorageStatus>
   checkStorage(directory: string): Promise<StorageStatus>
@@ -213,6 +215,7 @@ export function createClient(): TaskboardClient {
     templateDelete: id => post('/dsh-taskboard/templates/delete', { id }),
     settings: () => get<SettingsResponse>('/dsh-taskboard/settings'),
     updateSettings: body => post('/dsh-taskboard/settings/update', body),
+    updateEmployees: employees => post('/dsh-taskboard/employees', { employees }),
     storage: () => get<StorageStatus>('/dsh-taskboard/storage'),
     checkStorage: directory => post<StorageStatus>('/dsh-taskboard/storage/check', { directory }),
     migrateStorage: directory => {

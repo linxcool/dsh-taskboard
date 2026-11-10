@@ -19,6 +19,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import {
   asBoardSettings,
+  asEmployeeBindings,
   asIsolation,
   asPermission,
   asStatus,
@@ -1532,6 +1533,23 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
             ledger.settings = next
             return []
           })
+          json(res, { ok: true, value: next })
+        } catch (error) {
+          const f = toFail(error)
+          json(res, f.res, f.status)
+        }
+        return
+      }
+
+      // ------------------------------------------ POST /employees
+      // (P3 v2) Whole-table replace for the employee catalog. The table lives
+      // on the LEDGER, not in settings: `settings/update` replaces the whole
+      // settings object, so a table kept there would be wiped by any board
+      // settings save.
+      if (pathname === `${ROUTE_PREFIX}/employees`) {
+        try {
+          const next = asEmployeeBindings((body as { employees?: unknown }).employees)
+          await store.mutate('employees-updated', ledger => { ledger.employees = next; return [] })
           json(res, { ok: true, value: next })
         } catch (error) {
           const f = toFail(error)
