@@ -28,6 +28,7 @@ import {
   checklistFromTexts,
   defaultIsolationOf,
   defaultPermissionOf,
+  employeeBindingFor,
   isValidRelRepoPath,
   newCommentId,
   newTaskId,
@@ -38,6 +39,7 @@ import {
   normalizePrompt,
   normalizeTitle,
   pendingReviewers,
+  permissionForCreate,
   sanitizeCustomBranchName,
   summarize,
   syncClaim,
@@ -773,7 +775,8 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
           const branchOverride = branchRaw === null ? undefined : sanitizeCustomBranchName(branchRaw)
           const presetId = body.presetId === undefined ? settings?.defaultPresetId : normalizePresetId(str(body, 'presetId'))
           const permissionRaw = str(body, 'permission')
-          const permission = permissionRaw === null ? defaultPermissionOf(store.snapshot().settings) : asPermission(permissionRaw)
+          // Explicit > employee binding > board default (shared with the tool).
+          const permission = permissionForCreate(store.snapshot(), presetId, permissionRaw === null ? undefined : permissionRaw)
           let checklist: TaskRecord['checklist'] = undefined
           if (body.checklist !== undefined) {
             if (!Array.isArray(body.checklist) || body.checklist.some(c => typeof c !== 'string')) {
@@ -915,6 +918,16 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
               // Preset may change any time: each run composes fresh.
               if (body.presetId === null) delete next.presetId
               else if (body.presetId !== undefined) next.presetId = normalizePresetId(str(body, 'presetId'))!
+              // A preset change recomputes an UNTOUCHED permission (spec §6
+              // rule 8): only when the card still carries exactly what the old
+              // preset/board produced. An explicitly chosen permission stays —
+              // that is the user's decision, not a default to refresh.
+              if (body.permission === undefined && body.presetId !== undefined && body.presetId !== null && next.presetId !== task.presetId) {
+                const ledgerView = { ...ledger }
+                const previousDefault = employeeBindingFor(ledgerView, task.presetId)?.permission ?? defaultPermissionOf(ledger.settings)
+                const current = task.permission ?? defaultPermissionOf(ledger.settings)
+                if (current === previousDefault) next.permission = permissionForCreate(ledgerView, next.presetId)
+              }
               // Permission (0.5.5): 'workspace-write' | 'read-only' | 'danger-full-access'
               if (body.permission === null) delete next.permission
               else if (body.permission !== undefined) next.permission = asPermission(body.permission)
@@ -1447,6 +1460,9 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
               // along when the file carries them; merge keeps the live ones.
               if (plan.settings !== undefined) ledger.settings = structuredClone(plan.settings)
               else delete ledger.settings
+              // The employee table rides along the same way.
+              if (plan.employees !== undefined) ledger.employees = structuredClone(plan.employees)
+              else delete ledger.employees
               return ledger.tasks
             }
             const byId = new Map(ledger.tasks.map(t => [t.id, t]))

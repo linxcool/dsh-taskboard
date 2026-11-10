@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { registerTaskboardTools, workspaceFace, type WorkspaceFace } from '../src/host/tools.ts'
 import { TaskStore } from '../src/host/store.ts'
+import { asEmployeeBindings } from '../src/shared/protocol.ts'
 
 let dir: string
 beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), 'tb-tools-')) })
@@ -65,6 +66,18 @@ describe('taskboard tool outputs', () => {
     expect(store.get(id)).toMatchObject({ blocked: true, waitingForHuman: false })
     expect(store.get(id)?.waitingReason).toBeUndefined()
   })
+  it('create inherits the binding permission when permission is omitted, and explicit wins', async () => {
+    const { tool, exec, store } = await setup()
+    await store.mutate('employees-updated', ledger => {
+      ledger.employees = asEmployeeBindings([{ presetId: 'std', role: 'maker', enabled: true, permission: 'read-only' }])
+      return []
+    })
+    const inherited = await tool('taskboard_create').execute({ title: 'Bound', workspaceId: 'ws-a', urgency: 'normal', presetId: 'std' }, exec) as { task: { id: string } }
+    expect(store.get(inherited.task.id)!.permission).toBe('read-only')
+    const explicit = await tool('taskboard_create').execute({ title: 'Explicit', workspaceId: 'ws-a', urgency: 'normal', presetId: 'std', permission: 'danger-full-access' }, exec) as { task: { id: string } }
+    expect(store.get(explicit.task.id)!.permission).toBe('danger-full-access')
+  })
+
   it('omits archived sessions from a project session picker', () => {
     const archived = ['session-b']
     const project = { id: 'ws-a', path: '/proj/a', title: 'A', sessionIds: ['session-a', 'session-b'] }

@@ -13,6 +13,7 @@ import { basename, dirname, join } from 'node:path'
 import {
   LEDGER_SCHEMA_VERSION,
   asBoardSettings,
+  asEmployeeBindings,
   emptyLedger,
   isPlausibleTaskRecord,
   pruneExecutions,
@@ -191,12 +192,27 @@ export class TaskStore {
           console.warn('[dsh-taskboard] dropping invalid board settings on load')
         }
       }
+      // The employee table is a first-class ledger field (not settings: a
+      // whole-object settings save would wipe it). Reloading rebuilds the
+      // ledger from a whitelist, so it MUST be carried through here or every
+      // reload/restart silently drops the table.
+      let employees: TaskLedger['employees']
+      if (parsed.employees !== undefined) {
+        try {
+          employees = asEmployeeBindings(parsed.employees)
+        } catch {
+          console.warn('[dsh-taskboard] dropping invalid employee bindings on load')
+        }
+      }
+      const employeesMigratedAt = typeof parsed.employeesMigratedAt === 'string' ? parsed.employeesMigratedAt : undefined
       this.ledger = {
         schemaVersion: LEDGER_SCHEMA_VERSION,
         revision: parsed.revision,
         tasks,
         ...(parsed.externalSync !== undefined ? { externalSync: normalizeExternalSyncRecords(parsed.externalSync) } : {}),
         ...(settings !== undefined ? { settings } : {}),
+        ...(employees !== undefined ? { employees } : {}),
+        ...(employeesMigratedAt !== undefined ? { employeesMigratedAt } : {}),
       }
       this.hasReadLedger = true
       this.loaded = true

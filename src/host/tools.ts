@@ -48,6 +48,7 @@ import {
   normalizeModel,
   normalizePrompt,
   normalizeTitle,
+  permissionForCreate,
   sanitizeCustomBranchName,
   summarize,
   syncClaim,
@@ -623,10 +624,13 @@ export function registerTaskboardTools(ctx: ToolContextFace, deps: ToolDeps): Ar
         // Issue #98: explicit task branch. Fail-soft — garbage/empty input
         // stores no override (the board naming preset applies at first run).
         const branchOverride = args.branch === undefined ? undefined : sanitizeCustomBranchName(args.branch)
-        // Match the GUI create route: freeze the current board default onto
-        // the task so later settings changes do not silently alter a schedule.
-        const permission = args.permission === undefined ? defaultPermissionOf(store.snapshot().settings) : asPermission(args.permission)
+        // Preset first: the employee binding it resolves to decides the default
+        // permission, so the two cannot disagree (create and preset changes
+        // share `permissionForCreate` with the GUI).
         const presetId = args.presetId === undefined ? store.snapshot().settings?.defaultPresetId : args.presetId.trim() || undefined
+        // Match the GUI create route: freeze the resolved permission onto the
+        // task so later binding/settings changes do not silently alter it.
+        const permission = permissionForCreate(store.snapshot(), presetId, args.permission)
         // T9: match the GUI create route — trim and drop blank lines instead
         // of failing the whole call over one empty string.
         const checklistTexts = args.checklist?.map(c => c.trim()).filter(c => c.length > 0)

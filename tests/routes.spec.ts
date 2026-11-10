@@ -1458,6 +1458,52 @@ describe('taskboard routes 0.5.0 (board settings → default isolation)', () => 
     expect(badShape.status).toBe(400)
   })
 
+  it('keeps the employee table across a ledger reload and a whole-book replace', async () => {
+    const table = [{ presetId: 'std', role: 'maker', enabled: true, permission: 'read-only' }]
+    expect((await post('/dsh-taskboard/employees', { employees: table })).status).toBe(200)
+
+    // Any later mutation reloads the file through the storage whitelist; the
+    // table must survive that (it silently disappeared before the store fix).
+    const created = await post('/dsh-taskboard/tasks', { title: 'After employees', workspaceId: 'ws-a', urgency: 'normal' })
+    expect(created.status).toBe(201)
+    const state = await (await fetch(`${base}/dsh-taskboard/state`)).json()
+    expect(state.value.employees).toEqual(table)
+
+    // A replace-mode import carries the file's table (and clears it when absent).
+    const file = {
+      schemaVersion: 1,
+      revision: 2,
+      tasks: [{ id: 't-kept', title: '替换后的任务', workspaceId: 'ws-a', urgency: 'normal', comments: [], executions: [] }],
+      employees: [{ presetId: 'rev', role: 'reviewer', enabled: true }],
+    }
+    const replaced = await post('/dsh-taskboard/import', { mode: 'replace', ledger: file })
+    expect(replaced.status, JSON.stringify(replaced.json)).toBe(200)
+    expect(store.snapshot().employees).toEqual([{ presetId: 'rev', role: 'reviewer', enabled: true }])
+  })
+
+  it('recomputes an untouched permission when the preset changes, and keeps an explicit one', async () => {
+    const table = await post('/dsh-taskboard/employees', {
+      employees: [
+        { presetId: 'std', role: 'maker', enabled: true, permission: 'workspace-write' },
+        { presetId: 'rev', role: 'reviewer', enabled: true, permission: 'read-only' },
+      ],
+    })
+    expect(table.status).toBe(200)
+    // Untouched: carries exactly the old preset's binding permission.
+    const fresh = await post('/dsh-taskboard/tasks', { title: 'Switch preset', workspaceId: 'ws-a', urgency: 'normal', presetId: 'std' })
+    const freshId = fresh.json.value.id as string
+    expect(store.get(freshId)!.permission).toBe('workspace-write')
+    const switched = await post(`/dsh-taskboard/tasks/${freshId}/update`, { ifVersion: store.get(freshId)!.version, presetId: 'rev' })
+    expect(switched.status).toBe(200)
+    expect(store.get(freshId)!.permission).toBe('read-only')
+
+    // Explicit: the user picked danger-full-access, so a preset change keeps it.
+    const pinned = await post('/dsh-taskboard/tasks', { title: 'Pinned permission', workspaceId: 'ws-a', urgency: 'normal', presetId: 'std', permission: 'danger-full-access' })
+    const pinnedId = pinned.json.value.id as string
+    await post(`/dsh-taskboard/tasks/${pinnedId}/update`, { ifVersion: store.get(pinnedId)!.version, presetId: 'rev' })
+    expect(store.get(pinnedId)!.permission).toBe('danger-full-access')
+  })
+
   it('materializes model/effort/preset defaults, honors overrides and null, and leaves existing tasks unchanged', async () => {
     const defaultModel = { provider: 'prov-a', model: 'model-a', reasoningEffort: 'high' }
     const saved = await post('/dsh-taskboard/settings/update', { defaultModel, defaultPresetId: ' standard ' })

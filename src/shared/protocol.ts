@@ -1623,6 +1623,8 @@ export type ImportPlan = {
   invalid: Array<{ id?: string; reason: string }>
   /** The file's board settings (0.5.0); replace-mode swaps them, merge keeps the live ones. */
   settings?: BoardSettings
+  /** The file's employee table; replace-mode swaps it, merge keeps the live one. */
+  employees?: EmployeeBinding[]
 }
 
 /** One unknown-value read helper: string fields with defaults. */
@@ -1900,7 +1902,8 @@ export function validateLedgerImport(raw: unknown, knownIds: ReadonlySet<string>
   }
   if (!Array.isArray(e.tasks)) throw new Error('导入文件的 tasks 不是数组')
   const plan: ImportPlan = { create: [], overwrite: [], invalid: [], ...(e.settings !== undefined ? { settings: asBoardSettings(e.settings) } : {}),
-    ...(e.externalSync !== undefined ? { externalSync: normalizeExternalSyncRecords(e.externalSync) } : {}) }
+    ...(e.externalSync !== undefined ? { externalSync: normalizeExternalSyncRecords(e.externalSync) } : {}),
+    ...(e.employees !== undefined ? { employees: asEmployeeBindings(e.employees) } : {}) }
   const seen = new Set<string>()
   for (const entry of e.tasks) {
     const id = typeof (entry as { id?: unknown })?.id === 'string' ? (entry as { id: string }).id : undefined
