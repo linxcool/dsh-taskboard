@@ -12,6 +12,33 @@ const GITHUB_API_VERSION = '2022-11-28'
 const DEFAULT_BASE_URL = 'https://api.github.com'
 const MAX_ISSUE_PAGES = 50
 const MAX_REPO_PAGES = 10
+/** Project item pages (100 items each) — a board with more items keeps the first 2000. */
+const MAX_PROJECT_PAGES = 20
+
+/**
+ * One page of a ProjectV2 board: each item's issue number and its single-select
+ * Status option. `repositoryOwner` covers both users and organizations.
+ */
+const PROJECT_ITEMS_QUERY = `query TaskboardProjectItems($login: String!, $num: Int!, $field: String!, $cursor: String) {
+  repositoryOwner(login: $login) {
+    projectV2(number: $num) {
+      items(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          content { ... on Issue { number } }
+          fieldValues(first: 50) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field { ... on ProjectV2SingleSelectField { name } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`
 
 /** Comma-separated label names, trimmed and lower-cased for lookups. */
 function words(raw: string | undefined): ReadonlySet<string> {
@@ -44,6 +71,73 @@ export class GithubProvider implements ExternalTaskProvider {
       'X-GitHub-Api-Version': GITHUB_API_VERSION,
       'User-Agent': 'dsh-taskboard-github',
     }, signal, () => this.throttle.wait(signal))
+  }
+
+  /** GraphQL POST against the API root (Project fields are not on REST). */
+  private async graphql(query: string, variables: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown>> {
+    await this.throttle.wait(signal)
+    const response = await this.request(`${this.baseUrl}/graphql`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.config.credentials.token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'dsh-taskboard-github',
+      },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      redirect: 'error',
+    })
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error(`External request failed (HTTP ${response.status})`)
+    }
+    const raw = await response.json().catch(() => { throw new Error('External service returned invalid JSON') }) as
+      { data?: unknown; errors?: unknown }
+    if (Array.isArray(raw.errors) && raw.errors.length > 0) throw new Error('GitHub Project query failed')
+    if (!raw.data || typeof raw.data !== 'object') throw new Error('invalid GitHub Project response')
+    return raw.data as Record<string, unknown>
+  }
+
+  /**
+   * issue number → Project Status option name for the configured board.
+   *
+   * One paginated query for the whole project instead of a lookup per issue.
+   * Empty when no project is configured, and a failed query degrades to empty
+   * (a token without the `project` scope must not break issue import).
+   */
+  private async projectStatuses(signal: AbortSignal): Promise<ReadonlyMap<number, string>> {
+    const statuses = new Map<number, string>()
+    const owner = (this.config.settings.projectOwner ?? '').trim()
+    const projectNumber = Number(this.config.settings.projectNumber ?? '')
+    if (owner.length === 0 || !Number.isSafeInteger(projectNumber) || projectNumber <= 0) return statuses
+    const field = (this.config.settings.statusField ?? 'Status').trim() || 'Status'
+    let cursor: string | undefined
+    for (let page = 0; page < MAX_PROJECT_PAGES; page++) {
+      const data = await this.graphql(PROJECT_ITEMS_QUERY, { login: owner, num: projectNumber, field, cursor: cursor ?? null }, signal)
+      const ownerNode = data.repositoryOwner as Record<string, unknown> | undefined
+      const project = ownerNode?.projectV2 as Record<string, unknown> | undefined
+      const items = project?.items as { pageInfo?: { hasNextPage?: unknown; endCursor?: unknown }; nodes?: unknown } | undefined
+      const nodes = Array.isArray(items?.nodes) ? items.nodes : []
+      for (const node of nodes) {
+        if (!node || typeof node !== 'object') continue
+        const entry = node as { content?: { number?: unknown }; fieldValues?: { nodes?: unknown } }
+        const number = entry.content?.number
+        if (typeof number !== 'number' || !Number.isSafeInteger(number)) continue
+        const values = Array.isArray(entry.fieldValues?.nodes) ? entry.fieldValues.nodes : []
+        for (const value of values) {
+          if (!value || typeof value !== 'object') continue
+          const fieldValue = value as { name?: unknown; field?: { name?: unknown } }
+          if (fieldValue.field?.name !== field) continue
+          if (typeof fieldValue.name === 'string' && fieldValue.name.length > 0) statuses.set(number, fieldValue.name)
+        }
+      }
+      const hasNext = items?.pageInfo?.hasNextPage === true
+      const endCursor = items?.pageInfo?.endCursor
+      if (!hasNext || typeof endCursor !== 'string' || endCursor.length === 0) break
+      cursor = endCursor
+    }
+    return statuses
   }
 
   private repo(projectId: string): string {
@@ -97,6 +191,8 @@ export class GithubProvider implements ExternalTaskProvider {
     const repo = this.repo(projectId)
     const items: ExternalItem[] = []
     const seen = new Set<string>()
+    // Project Status is fetched once per sync; a failed query degrades to no mapping.
+    const statuses = await this.projectStatuses(signal).catch(() => new Map<number, string>())
     const since = this.sinceQuery()
     for (let page = 1; page <= MAX_ISSUE_PAGES; page++) {
       const raw = await this.get(`/repos/${repo}/issues?state=all&per_page=100&sort=updated&direction=desc&page=${page}${since}`, signal)
@@ -107,7 +203,7 @@ export class GithubProvider implements ExternalTaskProvider {
         const record = entry as Record<string, unknown>
         // The issues endpoint also returns pull requests; the board tracks issues only.
         if (record.pull_request !== undefined) continue
-        const item = this.normalize(projectId, record)
+        const item = this.normalize(projectId, record, statuses)
         if (seen.has(item.id)) continue
         seen.add(item.id)
         added++
@@ -130,7 +226,8 @@ export class GithubProvider implements ExternalTaskProvider {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('invalid GitHub issue response')
     const record = raw as Record<string, unknown>
     if (record.pull_request !== undefined) return undefined
-    return this.normalize(projectId, record)
+    const statuses = await this.projectStatuses(signal).catch(() => new Map<number, string>())
+    return this.normalize(projectId, record, statuses)
   }
 
   private sinceQuery(): string {
@@ -140,7 +237,7 @@ export class GithubProvider implements ExternalTaskProvider {
     return `&since=${encodeURIComponent(`${since}T00:00:00Z`)}`
   }
 
-  private normalize(projectId: string, raw: Record<string, unknown>): ExternalItem {
+  private normalize(projectId: string, raw: Record<string, unknown>, statuses?: ReadonlyMap<number, string>): ExternalItem {
     const number = raw.number
     if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) throw new Error('invalid GitHub issue number')
     const title = raw.title
@@ -158,6 +255,7 @@ export class GithubProvider implements ExternalTaskProvider {
       projectId, type: 'issue', id: String(number), title: title.trim(), description: body,
       priority: labels.join(','), status: state, assignedTo: this.login(raw.assignee) ?? assignees[0] ?? '',
       assignees, closed: state === 'closed', urgency, url,
+      ...(statuses?.has(number) === true ? { projectStatus: statuses.get(number)! } : {}),
     }
   }
 

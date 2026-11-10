@@ -2,7 +2,8 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { ExternalItem, ExternalSource, ExternalSyncRecord } from '../shared/external.ts'
 import { externalKey, mergeExternalFields, normalizeExternalSource, normalizeExternalSyncRecords } from '../shared/external.ts'
-import { defaultIsolationOf, defaultPermissionOf, newTaskId, normalizeTitle, type TaskRecord, type TaskLedger } from '../shared/protocol.ts'
+import { defaultIsolationOf, defaultPermissionOf, newTaskId, normalizeTitle, type TaskLedger, type TaskRecord, type TaskStatus } from '../shared/protocol.ts'
+import { parseStatusMap } from '../shared/github-status-map.ts'
 import type { TaskStore } from './store.ts'
 import type { ExternalConfig, ExternalSyncStatus, SyncResult } from '../shared/external.ts'
 import type { ExternalTaskProvider, ExternalProviderRegistry } from './external-provider.ts'
@@ -192,6 +193,21 @@ export class ExternalSyncService {
     this.controller = new AbortController()
     const signal = AbortSignal.any([this.controller.signal, AbortSignal.timeout(300_000)])
     const result: SyncResult = { created: 0, updated: 0, unchanged: 0, conflicts: 0, ignored: 0, at: this.now() }
+    /**
+     * Project Status option → board column, the reverse of the connection's
+     * `column=option` map. Items without a project status (or with an option
+     * the board does not model, e.g. an extra review stage) fall back to the
+     * configured import column.
+     */
+    const columnForProjectStatus = ((): ReadonlyMap<string, TaskStatus> => {
+      const reverse = new Map<string, TaskStatus>()
+      for (const [status, option] of Object.entries(parseStatusMap(config.settings.statusMap))) {
+        if (typeof option === 'string' && option.length > 0) reverse.set(option, status as TaskStatus)
+      }
+      return reverse
+    })()
+    const statusForItem = (item: ExternalItem): TaskStatus | undefined =>
+      item.projectStatus === undefined ? undefined : columnForProjectStatus.get(item.projectStatus)
     let committed = false
     try {
       await this.options.store.load()
@@ -251,7 +267,7 @@ export class ExternalSyncService {
               const assignees = (item.assignees ?? [item.assignedTo]).filter(login => login.length > 0)
               if (item.closed || (assignees.length > 0 && !assignees.includes(config.account))) continue
               const created: TaskRecord = { id: newTaskId(), title: item.title, description: item.description, urgency: item.urgency,
-                workspaceId, prompt: '', status: config.importStatus ?? 'backlog', blocked: false, execution: { mode: 'claim' },
+                workspaceId, prompt: '', status: statusForItem(item) ?? config.importStatus ?? 'backlog', blocked: false, execution: { mode: 'claim' },
                 isolation: defaultIsolationOf(ledger.settings), permission: defaultPermissionOf(ledger.settings),
                 model: ledger.settings?.defaultModel, presetId: ledger.settings?.defaultPresetId,
                 version: 1, createdAt: result.at, updatedAt: result.at, createdBy: { kind: 'user' }, updatedBy: { kind: 'user' },
@@ -279,6 +295,13 @@ export class ExternalSyncService {
               const sameItem = ([...new Set([...Object.keys(previous), ...Object.keys(item)])] as Array<keyof ExternalItem>).every(key => JSON.stringify(previous[key]) === JSON.stringify(item[key]))
               if (!workspaceChanged && sameItem && JSON.stringify(task.external!.conflicts) === JSON.stringify(source.conflicts)) { result.unchanged++; continue }
               Object.assign(task, merged.fields)
+              // A card nobody has touched (still 待澄清) follows the tracker's
+              // own status. Anything a human or agent moved is left alone: the
+              // board is authoritative from then on.
+              const remoteStatus = statusForItem(item)
+              if (remoteStatus !== undefined && task.status === 'backlog' && remoteStatus !== 'backlog') {
+                task.status = remoteStatus
+              }
               task.external = source; task.version++; task.updatedAt = result.at
               changed.push(task); result.updated++
               if (source.conflicts.length) result.conflicts++

@@ -46,6 +46,61 @@ describe('GitHub provider', () => {
     expect(calls[0]!.url.href).not.toContain('private-token')
   })
 
+  it('attaches the Project Status option when a board is configured', async () => {
+    const paths: string[] = []
+    const mock = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input))
+      paths.push(url.pathname)
+      if (url.pathname === '/graphql') {
+        expect(String(init?.body)).toContain('ProjectV2ItemFieldSingleSelectValue')
+        return response({
+          data: {
+            repositoryOwner: {
+              projectV2: {
+                items: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    { content: { number: 7 }, fieldValues: { nodes: [{ name: '执行中', field: { name: 'Status' } }] } },
+                    { content: { number: 8 }, fieldValues: { nodes: [{ name: '待澄清', field: { name: 'Status' } }] } },
+                    { content: { number: 9 }, fieldValues: { nodes: [] } },
+                  ],
+                },
+              },
+            },
+          },
+        })
+      }
+      return response([issue(7), issue(8), issue(9)])
+    }) as typeof fetch
+    const items = await new GithubProvider(
+      config({ settings: { projectOwner: 'acme', projectNumber: '1', statusField: 'Status' } }),
+      mock,
+      0,
+    ).getItems('acme/repo', AbortSignal.timeout(1000))
+    expect(paths).toContain('/graphql')
+    expect(items.map(item => item.projectStatus)).toEqual(['执行中', '待澄清', undefined])
+  })
+
+  it('omits the project status when no board is configured or the query fails', async () => {
+    const noProject = await new GithubProvider(config(), (async () => response([issue(7)])) as unknown as typeof fetch, 0)
+      .getItems('acme/repo', AbortSignal.timeout(1000))
+    expect(noProject[0]!.projectStatus).toBeUndefined()
+
+    const failing = (async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/graphql') return response({ errors: [{ message: 'no scope' }] })
+      return response([issue(7)])
+    }) as typeof fetch
+    const degraded = await new GithubProvider(
+      config({ settings: { projectOwner: 'acme', projectNumber: '1' } }),
+      failing,
+      0,
+    ).getItems('acme/repo', AbortSignal.timeout(1000))
+    // A token without the project scope must not break issue import.
+    expect(degraded).toHaveLength(1)
+    expect(degraded[0]!.projectStatus).toBeUndefined()
+  })
+
   it('paginates beyond a full page and stops on a short page', async () => {
     const calls: URL[] = []
     const mock = (async (input: string | URL | Request) => {

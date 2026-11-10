@@ -58,6 +58,12 @@ export type ExternalItem = ExternalFields & {
   assignedTo: string
   assignees?: string[]
   closed: boolean
+  /**
+   * The item's option name in the tracker's board (GitHub Project Status).
+   * Absent when the source has no such field; the sync maps it back to a board
+   * column through the connection's statusMap.
+   */
+  projectStatus?: string
 }
 export type ExternalSource = {
   providerName?: string
@@ -90,6 +96,7 @@ export function normalizeExternalSource(raw: unknown): ExternalSource | undefine
     assignedTo: i.assignedTo as string, title: i.title as string, description: i.description as string,
     urgency: i.urgency as ExternalItem['urgency'], closed: i.closed,
     ...(Array.isArray(i.assignees) ? { assignees: i.assignees.filter((v): v is string => typeof v === 'string') } : {}),
+    ...(typeof i.projectStatus === 'string' && i.projectStatus.length > 0 ? { projectStatus: i.projectStatus } : {}),
   }
   return { connectionId: e.connectionId, provider: e.provider, ...(typeof e.providerName === 'string' ? { providerName: e.providerName } : {}), syncedAt: e.syncedAt, item,
     conflicts: Array.isArray(e.conflicts) ? e.conflicts.filter((v): v is keyof ExternalFields => ['title', 'description', 'urgency'].includes(v)) : [] }

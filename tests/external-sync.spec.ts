@@ -70,6 +70,65 @@ describe('sync service', () => {
     expect(f.store.snapshot().tasks.map(t => t.external?.item.id).sort()).toEqual(['mine', 'no-assignee'])
     f.service.dispose()
   })
+  it('maps the project status onto the board column for new cards', async () => {
+    const f = await fixture()
+    await f.service.configure({
+      provider: 'github', baseUrl: 'https://api.github.com', authMode: 'token', account: 'alice',
+      credentials: { token: 'private-token' },
+      settings: { statusMap: 'backlog=待澄清,todo=就绪,in_progress=执行中,in_review=待你验收,done=完成,canceled=取消' },
+      mappings: [{ projectId: 'acme/repo', workspaceId: 'ws' }],
+    } as never)
+    f.set([
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '1', projectStatus: '执行中' },
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '2', projectStatus: '待你验收' },
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '3' },
+      // An option the board does not model falls back to the import column.
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '4', projectStatus: '待合并' },
+    ])
+    await f.service.sync()
+    const byExt = new Map(f.store.snapshot().tasks.map(task => [task.external!.item.id, task.status]))
+    expect(byExt.get('1')).toBe('in_progress')
+    expect(byExt.get('2')).toBe('in_review')
+    expect(byExt.get('3')).toBe('backlog')
+    expect(byExt.get('4')).toBe('backlog')
+    f.service.dispose()
+  })
+
+  it('adopts the tracker status only for cards still sitting in the import column', async () => {
+    const f = await fixture()
+    await f.service.configure({
+      provider: 'github', baseUrl: 'https://api.github.com', authMode: 'token', account: 'alice',
+      credentials: { token: 'private-token' },
+      settings: { statusMap: 'backlog=待澄清,todo=就绪,in_progress=执行中,in_review=待你验收,done=完成,canceled=取消' },
+      mappings: [{ projectId: 'acme/repo', workspaceId: 'ws' }],
+    } as never)
+    f.set([
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '1', assignedTo: 'alice' },
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '2', assignedTo: 'alice' },
+    ])
+    await f.service.sync()
+    expect(f.store.snapshot().tasks.map(task => task.status)).toEqual(['backlog', 'backlog'])
+
+    // One card gets triaged locally; the other stays untouched.
+    const [first, second] = f.store.snapshot().tasks
+    await f.store.mutate('task-moved', ledger => {
+      const target = ledger.tasks.find(task => task.id === first!.id)!
+      target.status = 'todo'
+      return [target]
+    })
+    f.set([
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '1', assignedTo: 'alice', projectStatus: '执行中' },
+      { ...item, projectId: 'acme/repo', type: 'issue', id: '2', assignedTo: 'alice', projectStatus: '待你验收' },
+    ])
+    await f.service.sync()
+    const statusById = new Map(f.store.snapshot().tasks.map(task => [task.id, task.status]))
+    // Triage wins over the remote status…
+    expect(statusById.get(first!.id)).toBe('todo')
+    // …an untouched card follows the tracker.
+    expect(statusById.get(second!.id)).toBe('in_review')
+    f.service.dispose()
+  })
+
   it('is idempotent and creates non-executing backlog tasks', async () => {
     const f = await fixture()
     expect((await f.service.sync()).created).toBe(1)

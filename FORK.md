@@ -21,7 +21,8 @@
   - 分页拉取 issues，跳过 PR；label → 紧急度（`urgentLabels` / `relaxedLabels`）；assignee → 处理人；`open/closed` 状态与链接保留
   - 已关闭 issue 默认只在看板已跟踪时更新，避免历史 issue 刷屏
   - `since` 可限定最早更新日期
-- 不写回 GitHub；导入为单向。
+- **状态导入映射**：导入时读取 issue 在 Project 里的 Status 选项名，按连接的 `statusMap` **反向**映射成看板列（新建卡直接落在对应列；已有卡仍停在导入列时会跟随一次，被人工/agent 动过的卡不被覆盖）。未映射的选项（如「技术检查」「待合并」「阻塞」）回落到「导入到」列。Project 未配置或 token 缺少 `project` scope 时自动降级为纯导入，不阻塞同步。
+- 不写回 GitHub；导入为单向（状态映射仅为导入时的一次读取，不持续轮询）。
 
 ### P2 · Project Status 回写（opt-in）
 
@@ -130,7 +131,7 @@ dsh plugin --profile desktop remove dsh-taskboard
 
 ## 已知限制
 
-- GitHub 同步是**单向导入**；Project Status 回写是可选旁路，不反向拉取 Project 状态变化。
+- GitHub 同步是**单向导入**（不含状态回读轮询）；写回是可选旁路。导入时会读一次 Project Status 映射看板列，但之后远端状态变化只影响仍停在导入列的卡，不会覆盖已处理的卡。
 - Project 字段必须是**单选**类型；不支持 iteration/其他字段类型。
 - 看板列固定 6 个；Project 里未被 `statusMap` 覆盖的 Status 选项（本项目是「技术检查」「待合并」「阻塞」）不参与回写，也不会出现在看板上（「阻塞」在看板里是卡片标记而非列）。
 - 评审关系只在创建时指定，编辑不可修改；agent 工具暂不支持创建评审卡。
