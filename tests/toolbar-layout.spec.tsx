@@ -118,6 +118,13 @@ describe('toolbar layout A', () => {
     await waitFor(() => view.cards() === 4)
   })
 
+  it('names the sort/filter drawer 排序', async () => {
+    const view = await mount()
+    const button = view.host.querySelector('[data-kind="more-filter"]')!
+    expect(button.textContent).toContain('排序')
+    expect(button.textContent).not.toContain('更多筛选')
+  })
+
   it('merges project and epic into one scope picker and shows a removable chip', async () => {
     const view = await mount()
     await view.click(view.host.querySelector('[data-kind="scope"]'))

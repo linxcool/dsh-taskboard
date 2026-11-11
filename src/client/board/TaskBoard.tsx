@@ -491,7 +491,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             title={t('board.filter.moreTitle')}
             onClick={() => setMoreFiltersOpen(open => !open)}
           >
-            🧰 {t('board.filter.more')}
+            🔀 {t('board.toolbar.sort')}
             {activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
           </button>
           {moreFiltersOpen && (
