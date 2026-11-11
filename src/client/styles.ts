@@ -52,8 +52,11 @@ button[class*="panelRow"]:has(.dsh-atb-pglyph) { position: relative; }
 .dsh-atb-search { width: 130px; }
 .dsh-atb-badge[data-kind="stale"] { background: rgba(217,130,43,.15); color: #d9822b; }
 
-.dsh-atb-board { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 12px 16px; gap: 10px; box-sizing: border-box; }
-.dsh-atb-panel-root[data-dsh-atb-windows] > .dsh-atb-board {
+.dsh-atb-board { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 10px 16px 12px; gap: 8px; box-sizing: border-box; }
+/* Only when the view really sits under the caption buttons (overlay titlebar).
+   The compatibility shell adds its own control bar above us and provides no
+   titlebar-area env vars, so env() math reserved a constant ~44px here. */
+.dsh-atb-panel-root[data-dsh-atb-inset="caption"] > .dsh-atb-board {
   padding-top: max(12px, calc(env(titlebar-area-y, 0px) + env(titlebar-area-height, 36px) + 8px - var(--dsh-atb-viewport-top, 0px)));
 }
 /* Toolbar layout A: view segments, merged scope picker, collapsible search,

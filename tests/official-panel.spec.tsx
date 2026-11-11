@@ -163,9 +163,11 @@ it('renders the board in the official page with Windows caption spacing and clea
   cleanups.push(() => { root.unmount(); host.remove() })
   const off = vi.spyOn(window, 'removeEventListener')
   root.render(React.createElement(f.records.get('main')!.component))
-  await waitFor(() => host.querySelector('.dsh-atb-panel-root[data-dsh-atb-windows]') !== null)
+  // jsdom measures every element at top 0, so the view counts as sitting under
+  // the caption controls here; the marker is what the CSS keys off.
+  await waitFor(() => host.querySelector('.dsh-atb-panel-root[data-dsh-atb-inset="caption"]') !== null)
   expect(host.querySelector('.dsh-atb-board')).not.toBeNull()
-  expect(STYLES).toContain('.dsh-atb-panel-root[data-dsh-atb-windows] > .dsh-atb-board')
+  expect(STYLES).toContain('.dsh-atb-panel-root[data-dsh-atb-inset="caption"] > .dsh-atb-board')
   root.unmount()
   expect(off.mock.calls.some(call => call[0] === 'resize')).toBe(true)
 })
