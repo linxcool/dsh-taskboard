@@ -74,18 +74,17 @@ async function mount() {
 }
 
 describe('toolbar layout A', () => {
-  it('gives the title its own header row, like a conversation title', async () => {
+  it('keeps the title and the controls on ONE row', async () => {
     const view = await mount()
-    const header = view.host.querySelector('[data-kind="header"]')!
-    expect(header).not.toBeNull()
-    expect(header.textContent).toContain('AGENT')
-    expect(header.textContent).toContain('rev 7')
-    // Controls live on the next row, not next to the title.
-    expect(header.querySelector('[data-kind="scope"]')).toBeNull()
-    expect(header.querySelector('[data-kind="more-actions"]')).toBeNull()
+    expect(view.host.querySelector('[data-kind="header"]')).toBeNull()
     const toolbar = view.host.querySelector('.dsh-atb-toolbar')!
-    expect(toolbar.querySelector('[data-kind="scope"]')).not.toBeNull()
-    expect(toolbar.querySelector('.dsh-atb-title')).toBeNull()
+    expect(toolbar.textContent).toContain('AGENT')
+    expect(toolbar.textContent).toContain('rev 7')
+    expect(toolbar.querySelector('.dsh-atb-title')).not.toBeNull()
+    for (const control of ['view-board', 'scope', 'more-filter', 'more-actions']) {
+      expect(toolbar.querySelector(`[data-kind="${control}"]`)).not.toBeNull()
+    }
+    expect(toolbar.querySelector('[data-kind="search"]')).not.toBeNull()
   })
 
   it('shows the version only inside the overflow menu', async () => {
