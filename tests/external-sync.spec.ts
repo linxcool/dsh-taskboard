@@ -18,6 +18,7 @@ async function configureGithub(f: { service: { configure: (body: unknown) => Pro
   await f.service.configure({
     provider: 'github', baseUrl: 'https://api.github.com', authMode: 'token', account: 'alice',
     credentials: { token: 'private-token' },
+    settings: { projectOwner: 'acme', projectNumber: '1' },
     mappings: [{ projectId: 'acme/repo', workspaceId: 'ws' }],
   } as never)
 }
@@ -149,6 +150,47 @@ describe('sync service', () => {
     const task = f.store.get(id)!
     expect(task.status).toBe('archived')
     expect(task.comments.at(-1)!.body).toContain('父任务')
+    f.service.dispose()
+  })
+
+  it('creates a GitHub issue for a board-created task in a mapped workspace', async () => {
+    const f = await fixture()
+    await configureGithub(f)
+    const urls: string[] = []
+    const response = (data: unknown, status = 200): Response =>
+      new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } })
+    vi.stubGlobal('fetch', (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      urls.push(url)
+      if (url.endsWith('/repos/acme/repo/issues')) {
+        return response({ number: 42, html_url: 'https://github.com/acme/repo/issues/42', node_id: 'ISSUE_42' }, 201)
+      }
+      if (url.endsWith('/graphql')) {
+        const query = String(init?.body ?? '')
+        if (query.includes('addProjectV2ItemById')) return response({ data: { addProjectV2ItemById: { item: { id: 'PVTI_1' } } } })
+        if (query.includes('updateProjectV2ItemFieldValue')) return response({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'PVTI_1' } } } })
+        return response({ data: { repositoryOwner: { projectV2: { id: 'P', field: { id: 'F', options: [{ id: 'O', name: '待澄清' }] } } } } })
+      }
+      throw new Error(`unexpected ${url}`)
+    }) as unknown as typeof fetch)
+
+    const created = await f.service.createForTask('ws', { title: '新卡', description: '正文', status: 'backlog' })
+    expect(created).toMatchObject({
+      repo: 'acme/repo',
+      number: 42,
+      url: 'https://github.com/acme/repo/issues/42',
+      projectStatus: '待澄清',
+    })
+    expect(urls.some(url => url.endsWith('/repos/acme/repo/issues'))).toBe(true)
+    vi.unstubAllGlobals()
+    f.service.dispose()
+  })
+
+  it('creates nothing when the connection is not GitHub or the workspace is unmapped', async () => {
+    const f = await fixture()
+    expect(await f.service.createForTask('ws', { title: 't', description: '', status: 'backlog' })).toBeUndefined()
+    await configureGithub(f)
+    expect(await f.service.createForTask('other-ws', { title: 't', description: '', status: 'backlog' })).toBeUndefined()
     f.service.dispose()
   })
 

@@ -4,6 +4,7 @@ import type { ExternalItem, ExternalSource, ExternalSyncRecord } from '../shared
 import { externalKey, mergeExternalFields, normalizeExternalSource, normalizeExternalSyncRecords } from '../shared/external.ts'
 import { defaultIsolationOf, defaultPermissionOf, newCommentId, newTaskId, normalizeBody, normalizeTitle, type TaskLedger, type TaskRecord, type TaskStatus } from '../shared/protocol.ts'
 import { parseStatusMap } from '../shared/github-status-map.ts'
+import { createIssueFromTask } from './github-create.ts'
 import type { TaskStore } from './store.ts'
 import type { ExternalConfig, ExternalSyncStatus, SyncResult } from '../shared/external.ts'
 import type { ExternalTaskProvider, ExternalProviderRegistry } from './external-provider.ts'
@@ -100,6 +101,30 @@ export class ExternalSyncService {
       requiresMappingReview: config?.provider === 'zentao' && !config.mappingMode,
       lastResult: record?.lastResult, lastError: this.volatileError ?? record?.lastError, lastAttemptAt: record?.lastAttemptAt, ignoredCount: record?.ignored.length ?? 0 }
   }
+  /**
+   * Create a tracker item for a board-created task (P6).
+   *
+   * Only a GitHub connection with a mapping for that workspace qualifies: the
+   * mapping is what makes "which repo does this project belong to" unambiguous.
+   * Returns undefined when nothing should be created (local-only card).
+   */
+  async createForTask(workspaceId: string, task: { title: string; description: string; status: TaskStatus }): Promise<
+    { connectionId: string; repo: string; number: number; url: string; projectStatus?: string } | undefined> {
+    await this.ready
+    const config = this.state.config
+    if (config === undefined || config.provider !== 'github') return undefined
+    const mapping = config.mappings.find(candidate => candidate.workspaceId === workspaceId)
+    if (mapping === undefined) return undefined
+    const result = await createIssueFromTask({
+      config, repo: mapping.projectId, title: task.title, body: task.description, status: task.status,
+    })
+    const projectStatus = result.projectAttached ? parseStatusMap(config.settings.statusMap)[task.status] : undefined
+    return {
+      connectionId: config.id, repo: mapping.projectId, number: result.number, url: result.url,
+      ...(projectStatus !== undefined ? { projectStatus } : {}),
+    }
+  }
+
   /**
    * Host-only snapshot of the active connection INCLUDING credentials. Used
    * by host-side integrations (GitHub write-back); never serialize or expose

@@ -47,6 +47,8 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const currentSync = defaultSyncExternalSessionsOf(state.ledger.settings)
   const currentPerm = defaultPermissionOf(state.ledger.settings)
   const currentMulti = allowClaimFromLinkedRootsOf(state.ledger.settings)
+  // P6: create a tracker issue for every card created on the board.
+  const currentCreateExternal = state.ledger.settings?.createExternal === true
   const currentMaxConcurrent = maxConcurrentOf(state.ledger.settings)
   const currentMissedAfterMinutes = scheduleMissedAfterMinutesOf(state.ledger.settings)
   const currentQueueMaxAgeMinutes = queueMaxAgeMinutesOf(state.ledger.settings)
@@ -75,6 +77,7 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const [draftSync, setDraftSync] = useState<boolean>(currentSync)
   const [draftPerm, setDraftPerm] = useState<PermissionMode>(currentPerm)
   const [draftMulti, setDraftMulti] = useState<boolean>(currentMulti)
+  const [draftCreateExternal, setDraftCreateExternal] = useState<boolean>(currentCreateExternal)
   const [draftMaxConcurrent, setDraftMaxConcurrent] = useState(String(currentMaxConcurrent))
   const [draftMissedAfterMinutes, setDraftMissedAfterMinutes] = useState(String(currentMissedAfterMinutes))
   const [draftQueueMaxAgeMinutes, setDraftQueueMaxAgeMinutes] = useState(String(currentQueueMaxAgeMinutes))
@@ -96,6 +99,7 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const dirty = draftModel !== currentModelKey || draftEffort !== currentEffort || draftPreset !== currentPreset
     || draftDefaultWorkspace !== currentDefaultWorkspace
     || draftIso !== currentIso || draftSync !== currentSync || draftPerm !== currentPerm || draftMulti !== currentMulti
+    || draftCreateExternal !== currentCreateExternal
     || draftBranchMode !== currentBranchMode || draftBranchPrefix !== currentBranchPrefix
     || draftMaxConcurrent !== String(currentMaxConcurrent) || draftMissedAfterMinutes !== String(currentMissedAfterMinutes)
     || draftQueueMaxAgeMinutes !== String(currentQueueMaxAgeMinutes) || draftDispatchIntervalMs !== String(currentDispatchIntervalMs)
@@ -124,6 +128,7 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
       syncExternalSessions: draftSync,
       defaultPermission: draftPerm,
       allowClaimFromLinkedRoots: draftMulti,
+      createExternal: draftCreateExternal,
       ...(parsedModel !== undefined ? { defaultModel: { ...parsedModel, ...(draftEffort !== '' ? { reasoningEffort: draftEffort } : {}) } } : {}),
       ...(draftPreset !== '' ? { defaultPresetId: draftPreset } : {}),
       ...(draftDefaultWorkspace !== '' ? { defaultWorkspaceId: draftDefaultWorkspace } : {}),
@@ -268,6 +273,33 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
           </section>
 
 
+
+          <section className="dsh-atb-diag-sec">
+            <h4>{t('set.createExternal.heading')}</h4>
+            <p className="dsh-atb-isolation-note">{t('set.createExternal.hint')}</p>
+            <div className="dsh-atb-mode-picker">
+              <button
+                type="button"
+                className="dsh-atb-mode-opt"
+                data-on={!draftCreateExternal}
+                title={t('set.createExternal.off.hint')}
+                onClick={() => setDraftCreateExternal(false)}
+              >
+                <span className="dsh-atb-mode-name">{t('set.createExternal.off.name')}</span>
+                <span className="dsh-atb-mode-hint">{t('set.createExternal.off.hint')}</span>
+              </button>
+              <button
+                type="button"
+                className="dsh-atb-mode-opt"
+                data-on={draftCreateExternal}
+                title={t('set.createExternal.on.hint')}
+                onClick={() => setDraftCreateExternal(true)}
+              >
+                <span className="dsh-atb-mode-name">{t('set.createExternal.on.name')}</span>
+                <span className="dsh-atb-mode-hint">{t('set.createExternal.on.hint')}</span>
+              </button>
+            </div>
+          </section>
 
           <section className="dsh-atb-diag-sec">
             <h4>{t('set.multiroots.heading')}</h4>

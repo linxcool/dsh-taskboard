@@ -62,6 +62,14 @@
 - 门禁：存在未关闭（非 done/canceled/archived）评审卡时，被评审任务**不能**移到 done；详情页完成按钮置灰，路由侧硬拒。
 - 代理（agent）本来就不能 done；门禁对用户与 API 同时生效。
 
+### P6 · 建卡即建 Issue（出站）
+
+- 看板设置「建卡时同步创建 GitHub Issue」（默认**关**）。打开后，新建任务会同时在 GitHub 建 issue、加入 Project 并按卡片状态设置 Status。
+- 仓库由**任务所属项目的连接映射**决定（mapping.workspaceId === task.workspaceId），多连接也不会歧义；没有映射就只建本地卡。
+- 成功后把 external 关联回填到卡片，之后状态写回、关闭归档、父任务筛选全部自动生效。
+- 失败策略：**issue 建成即成功**。Project 加入/设状态失败只在卡片留一条 host 评论，不重试（避免重复 issue）；issue 本身建失败则卡片照常保留并留言。
+- 只在建卡时触发；编辑标题/描述不会改 issue（单向出站仅限创建）。
+
 ### P5 · 看板列对齐 GitHub Status
 
 - 主列从 5 个改为 6 个（待澄清 / 就绪 / 执行中 / 待你验收 / 完成 / 取消），与 Project 的 Status 选项一一对应；取消从「其他任务」页移入主列并默认折叠。

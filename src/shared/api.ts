@@ -270,6 +270,8 @@ export type UpdateSettingsBody = {
   syncExternalSessions?: boolean
   /** Allow claiming a task through a linked multi-root workspace root. */
   allowClaimFromLinkedRoots?: boolean
+  /** Create a tracker issue for every card created on the board (P6). */
+  createExternal?: boolean
   /** Default permission preset for NEW tasks ('workspace-write' | 'read-only' | 'danger-full-access'). */
   defaultPermission?: string
   /** Default model and optional reasoning effort for NEW tasks; omitted = deployment default. */

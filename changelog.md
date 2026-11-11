@@ -7,6 +7,7 @@
 - **折叠状态泛化**：原来按列分开的三个布尔改为一份折叠列表，取消列默认折叠；旧浏览器里保存的折叠状态会自动迁移。
 - **状态导入映射**：导入时读取 issue 在 GitHub Project 的 Status 选项，按 `statusMap` 反向映射成看板列——新建卡直接落在对应列，仍停在「待澄清」的存量卡跟随一次；未映射选项回落「导入到」列。
 - **子任务/史诗与关闭归档**：导入时读取 sub-issue 关系，根问题且有子项作为「父任务」筛选维度（不建卡，筛出全部后代）；有父级的 issue 正常建卡；来源 issue 关闭后自动归档（在途执行时延后）。
+- **建卡即建 Issue**：看板设置新增开关（默认关），打开后新建任务会在 GitHub 建 issue、加入 Project 并按状态设置 Status；仓库按项目映射自动选择，失败只在卡片留言。
 - **员工绑定与会话槽位**：员工角色/权限改为显式绑定（含一次性迁移），建卡与 `taskboard_create` 共用权限解析，换 preset 时只重算未被手改过的权限；评审卡改为由默认评审员工执行；卡片新增按会话聚合的会话列表与「开会话」编排入口；详情页可直接改执行员工。
 
 **English:**
@@ -16,6 +17,7 @@
 - **Generalized collapse state**: the three per-column booleans become one collapsed-columns list, with the canceled column closed by default; older browser state migrates automatically.
 - **Incoming status mapping**: import reads each issue's GitHub Project Status option and maps it back to a board column through `statusMap` — new cards land in the matching column and cards still sitting in the import column follow once; unmapped options fall back to the import target.
 - **Sub-issues, epics and closing**: import reads the sub-issue tree; a root issue with children becomes an epic filter facet (no card, filters all descendants) while issues with a parent become cards; a closed source issue archives its card automatically (delayed while a run is live).
+- **Create the issue with the card**: a new board setting (off by default) makes every created task open a GitHub issue, add it to the Project and set its status; the repo comes from the project mapping and failures are reported on the card.
 - **Employee bindings and session slot**: employee role/permission are explicit bindings (with a one-shot migration) shared by the create form and `taskboard_create`; changing a preset only recomputes an untouched permission. Review cards now run as the default reviewer, cards gain a per-session list plus an "open session" composer, and the detail pane can reassign the executing employee.
 ### 0.9.11 — 2026-11-05
 

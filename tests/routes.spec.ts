@@ -39,6 +39,9 @@ let runCalls: Array<{ id: string; runOptions?: { reuseWorktree?: boolean; openin
 /** Mutable comment-wake hook target + call log (issue #51 Plan A tests). */
 let commentRunCalls: string[]
 let commentRunImpl: (id: string) => Promise<{ ok: true; delivered: 'live' | 'run'; count: number; executionId?: string; sessionId?: string } | { ok: false; error: string }> = async () => ({ ok: false, error: '没有待投递的留言' })
+/** P6: outbound issue creation face (mutable per test). */
+let externalCreateCalls: Array<{ workspaceId: string; title: string }> = []
+let externalCreateImpl: (workspaceId: string, task: { title: string; description: string; status: string }) => Promise<unknown> = async () => undefined
 let dir: string
 /** Per-test store file counter (unique names keep a fresh store from ever
  *  reading a previous test's ledger file). */
@@ -213,6 +216,12 @@ beforeAll(async () => {
       presets: [{ id: 'standard', name: '标准模式' }],
       defaultPresetId: 'standard',
     }),
+    externalSync: {
+      createForTask: async (workspaceId: string, task: { title: string; description: string; status: string }) => {
+        externalCreateCalls.push({ workspaceId, title: task.title })
+        return externalCreateImpl(workspaceId, task)
+      },
+    } as never,
   })
   server.on('request', (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x')
@@ -236,6 +245,8 @@ beforeEach(async () => {
   cancelCalls.length = 0
   runCalls.length = 0
   commentRunCalls.length = 0
+  externalCreateCalls = []
+  externalCreateImpl = async () => undefined
   commentRunImpl = async () => ({ ok: false, error: '没有待投递的留言' })
   archivedSessionsHistory.length = 0
   Object.assign(gitBehavior, freshGitBehavior())
@@ -435,6 +446,41 @@ describe('taskboard routes', () => {
     expect(bad.json.error.code).toBe('invalid_input')
     const unknownWs = await post('/dsh-taskboard/tasks', { title: 'x', workspaceId: 'nope', urgency: 'normal' })
     expect(unknownWs.status).toBe(404)
+  })
+
+  it('creates the tracker issue with the card when the board setting is on', async () => {
+    externalCreateImpl = async () => ({
+      connectionId: 'c', repo: 'acme/repo', number: 7,
+      url: 'https://github.com/acme/repo/issues/7', projectStatus: '待澄清',
+    })
+    await post('/dsh-taskboard/settings/update', { createExternal: true })
+    const created = await post('/dsh-taskboard/tasks', { title: '新卡', workspaceId: 'ws-a', urgency: 'normal' })
+    expect(created.status).toBe(201)
+    expect(externalCreateCalls).toEqual([{ workspaceId: 'ws-a', title: '新卡' }])
+    const task = store.snapshot().tasks.find(candidate => candidate.id === created.json.value.id)!
+    expect(task.external).toMatchObject({
+      connectionId: 'c', provider: 'github',
+      item: { projectId: 'acme/repo', type: 'issue', id: '7', projectStatus: '待澄清', closed: false },
+    })
+  })
+
+  it('keeps the card and leaves a host comment when issue creation fails', async () => {
+    externalCreateImpl = async () => { throw new Error('GitHub issue creation failed (HTTP 403)') }
+    await post('/dsh-taskboard/settings/update', { createExternal: true })
+    const created = await post('/dsh-taskboard/tasks', { title: '失败卡', workspaceId: 'ws-a', urgency: 'normal' })
+    expect(created.status).toBe(201)
+    const task = store.snapshot().tasks.find(candidate => candidate.id === created.json.value.id)!
+    expect(task.status).toBe('todo')
+    expect(task.comments.at(-1)).toMatchObject({ threadId: 'host' })
+    expect(task.comments.at(-1)!.body).toContain('GitHub Issue 创建失败')
+  })
+
+  it('does not touch the tracker when the setting is off', async () => {
+    externalCreateImpl = async () => ({ connectionId: 'c', repo: 'acme/repo', number: 9, url: 'https://x' })
+    const created = await post('/dsh-taskboard/tasks', { title: '本地卡', workspaceId: 'ws-a', urgency: 'normal' })
+    expect(created.status).toBe(201)
+    expect(externalCreateCalls).toEqual([])
+    expect(store.snapshot().tasks.find(candidate => candidate.id === created.json.value.id)!.external).toBeUndefined()
   })
 
   it('moves through the lifecycle; the USER may complete (done)', async () => {

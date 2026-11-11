@@ -852,6 +852,47 @@ export function registerTaskboardRoutes(ctx: Context, options: TaskboardRoutesOp
             ledger.tasks.push(task)
             return [task]
           })
+          // P6: a board-created card can also open the tracker issue. The
+          // switch is off by default; the connection is chosen by the task's
+          // workspace mapping, so multiple connections stay unambiguous.
+          if (store.snapshot().settings?.createExternal === true && options.externalSync !== undefined) {
+            try {
+              const linked = await options.externalSync.createForTask(workspaceId, task)
+              if (linked !== undefined) {
+                await store.mutate('task-updated', ledger => {
+                  const target = ledger.tasks.find(candidate => candidate.id === task.id)
+                  if (target === undefined) return []
+                  target.external = {
+                    connectionId: linked.connectionId, provider: 'github', syncedAt: options.now(), conflicts: [],
+                    item: {
+                      projectId: linked.repo, type: 'issue', id: String(linked.number), url: linked.url,
+                      status: 'open', priority: '', assignedTo: '', title: target.title,
+                      description: target.description, urgency: target.urgency, closed: false,
+                      ...(linked.projectStatus !== undefined ? { projectStatus: linked.projectStatus } : {}),
+                    },
+                  }
+                  target.version++
+                  target.updatedAt = options.now()
+                  return [target]
+                })
+              }
+            } catch (error) {
+              // The card already exists: creation failure is reported on the
+              // card, never by failing the create request.
+              const reason = error instanceof Error ? error.message : String(error)
+              await store.mutate('comment-added', ledger => {
+                const target = ledger.tasks.find(candidate => candidate.id === task.id)
+                if (target === undefined) return []
+                target.comments.push({
+                  id: newCommentId(), body: normalizeBody(`GitHub Issue 创建失败：${reason}`),
+                  threadId: 'host', version: 1, createdAt: options.now(),
+                })
+                target.version++
+                target.updatedAt = options.now()
+                return [target]
+              })
+            }
+          }
           json(res, { ok: true, value: summarize(task) }, 201)
         } catch (error) {
           const f = toFail(error)

@@ -384,6 +384,11 @@ export type BoardSettings = {
   /** Automatically capture external workspace sessions into the taskboard (default: false). */
   syncExternalSessions?: boolean
   /**
+   * Create a tracker issue for every card created on the board (P6, default
+   * false). The connection is chosen by the task's workspace mapping.
+   */
+  createExternal?: boolean
+  /**
    * Allow an agent session to CLAIM a task of a project it reaches only through
    * a linked (multi-root) workspace root instead of its own workspace root
    * (default: false — the primary-root-only rule).
@@ -440,6 +445,12 @@ export function asBoardSettings(raw: unknown): BoardSettings {
       throw new Error('syncExternalSessions must be a boolean')
     }
     out.syncExternalSessions = e.syncExternalSessions
+  }
+  if (e.createExternal !== undefined) {
+    if (typeof e.createExternal !== 'boolean') {
+      throw new Error('createExternal must be a boolean')
+    }
+    out.createExternal = e.createExternal
   }
   if (e.allowClaimFromLinkedRoots !== undefined) {
     if (typeof e.allowClaimFromLinkedRoots !== 'boolean') {
