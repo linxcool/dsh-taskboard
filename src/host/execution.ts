@@ -966,7 +966,7 @@ export class ExecutionService {
                 const error = (pending.error ?? 'execution failed').slice(0, 300)
                 t.comments.push({
                   id: newCommentId(),
-                  body: normalizeBody(`[系统] 执行失败：${error}；任务已退回待办。`),
+                  body: normalizeBody(`[系统] 执行失败：${error}；任务已退回就绪。`),
                   systemKey: 'sys.execFailed', systemParams: { error },
                   threadId: sessionId, version: 1, createdAt: now,
                 })
@@ -990,7 +990,7 @@ export class ExecutionService {
             t.updatedBy = { kind: 'system' }
             t.comments.push({
               id: newCommentId(),
-              body: normalizeBody('[系统] 定期任务本轮执行完成，已按设置自动回到待办，等待下一次触发。'),
+              body: normalizeBody('[系统] 定期任务本轮执行完成，已按设置自动回到就绪，等待下一次触发。'),
               systemKey: 'sys.periodicRearmed',
               threadId: sessionId,
               version: 1,
@@ -1009,7 +1009,7 @@ export class ExecutionService {
               t.execution = { mode: 'claim' }
               t.comments.push({
                 id: newCommentId(),
-                body: normalizeBody(`[系统] 定期任务本轮执行完毕，已按设置新建待办卡 ${successor.id} 承接下一轮，请审查本卡后验收。`),
+                body: normalizeBody(`[系统] 定期任务本轮执行完毕，已按设置新建就绪卡 ${successor.id} 承接下一轮，请审查本卡后验收。`),
                 systemKey: 'sys.periodicHandoff',
                 systemParams: { nextTaskId: successor.id },
                 threadId: sessionId,
@@ -1059,7 +1059,7 @@ export class ExecutionService {
                 t.execution = { mode: 'claim' }
                 t.comments.push({
                   id: newCommentId(),
-                  body: normalizeBody(`[系统] 定期任务本轮执行完毕，定时已由新待办卡 ${successor.id} 承接，请审查本卡后验收。`),
+                  body: normalizeBody(`[系统] 定期任务本轮执行完毕，定时已由新就绪卡 ${successor.id} 承接，请审查本卡后验收。`),
                   systemKey: 'sys.periodicHandoff',
                   systemParams: { nextTaskId: successor.id },
                   threadId: sessionId,
@@ -1382,11 +1382,11 @@ export class ExecutionService {
       + `2. taskboard_execution_report 提交结构化执行报告（做了什么/改了哪些文件/如何验证/剩余风险；提交与评论不冲突，都会展示给验收人）\n`
       + `3. taskboard_comment_add 留评论：做了什么改动 / 如何验证 / 剩余风险\n`
       + `${periodicCompletion === 'rearm'
-        ? '4. 本任务设为“完成后移回待办”：完成报告和评论后无需改变状态，宿主会在会话结束时自动回到待办。\n'
+        ? '4. 本任务设为“完成后移回就绪”：完成报告和评论后无需改变状态，宿主会在会话结束时自动回到就绪。\n'
         : periodicCompletion === 'spawn'
-          ? '4. 本任务设为“完成后新建待办”：完成报告和评论后无需改变状态，宿主会保留本卡待验收并新建下一轮待办卡。\n'
+          ? '4. 本任务设为“完成后新建就绪”：完成报告和评论后无需改变状态，宿主会保留本卡待验收并新建下一轮就绪卡。\n'
           : '4. taskboard_move 将本任务移至待验收 in_review（带 ifVersion）\n'}`
-      + `若无法完成：留评论说明原因，将任务移回待办 todo。`
+      + `若无法完成：留评论说明原因，将任务移回就绪 todo。`
     text += this.checklistFraming(task)
     text += this.isolationFraming(prepared, degradeNote)
     return text

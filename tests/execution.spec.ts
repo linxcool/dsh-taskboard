@@ -243,7 +243,7 @@ describe('ExecutionService', () => {
     expect(inject.content[0]!.text).toContain('taskboard_comment_add')
     expect(inject.content[0]!.text).toContain('taskboard_move')
     expect(inject.content[0]!.text).toContain('in_review')
-    expect(inject.content[0]!.text).toContain('移回待办 todo')
+    expect(inject.content[0]!.text).toContain('移回就绪 todo')
     // The framing line carries NO card content; the user bubble carries NO protocol.
     expect(inject.content[0]!.text).not.toContain('DO THE THING')
     expect(user.content[0]!.type).toBe('text')

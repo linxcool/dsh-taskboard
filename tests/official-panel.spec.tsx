@@ -140,7 +140,7 @@ it('updates sidebar counts, shows a collapsed badge, and releases its observer',
   cleanups.push(() => { root.unmount(); host.remove() })
   root.render(React.createElement(f.records.get('sidebar.panellist')!.component))
   await waitFor(() => host.querySelector('.dsh-atb-pstats')?.textContent === '1|1|1')
-  expect(host.querySelector('.dsh-atb-pstats')!.getAttribute('title')).toContain('待办 1')
+  expect(host.querySelector('.dsh-atb-pstats')!.getAttribute('title')).toContain('就绪 1')
   f.tasks([makeTask('todo'), { ...makeTask('todo'), id: 'another' }])
   await f.controller.refresh()
   await waitFor(() => host.querySelector('.dsh-atb-pstats')?.textContent === '2|0|0')

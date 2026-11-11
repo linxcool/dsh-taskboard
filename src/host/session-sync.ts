@@ -788,7 +788,7 @@ export class ExternalSessionSyncService {
           task.status = 'todo'
           task.comments.push({
             id: newCommentId(),
-            body: normalizeBody(`[系统] 会话执行异常：${errorMessage.slice(0, 300)}；任务已退回待办。`),
+            body: normalizeBody(`[系统] 会话执行异常：${errorMessage.slice(0, 300)}；任务已退回就绪。`),
             systemKey: 'sys.sessionError',
             systemParams: { error: errorMessage.slice(0, 300) },
             threadId: sessionId,
@@ -819,7 +819,7 @@ export class ExternalSessionSyncService {
               task.execution = { mode: 'claim' }
               task.comments.push({
                 id: newCommentId(),
-                body: normalizeBody(`[系统] 定期任务本轮执行完毕，定时已由新待办卡 ${successor.id} 承接，请审查本卡后验收。`),
+                body: normalizeBody(`[系统] 定期任务本轮执行完毕，定时已由新就绪卡 ${successor.id} 承接，请审查本卡后验收。`),
                 systemKey: 'sys.periodicHandoff',
                 systemParams: { nextTaskId: successor.id },
                 threadId: sessionId,

@@ -186,7 +186,7 @@ describe('ExternalSessionSyncService (0.5.4)', () => {
     expect(task.executions[1]!.error).toContain('quota limit exceeded')
     expect(task.comments).toHaveLength(2)
     expect(task.comments[1]!.body).toContain('会话执行异常')
-    expect(task.comments[1]!.body).toContain('任务已退回待办')
+    expect(task.comments[1]!.body).toContain('任务已退回就绪')
 
     h.dispose()
   })
