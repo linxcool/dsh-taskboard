@@ -4,7 +4,7 @@
  *
  * @module dsh-taskboard/client/board/TaskBoard
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes } from 'react'
 import type { BoardController, ControllerState } from '../controller.ts'
 import type { TaskRecord, TaskStatus, Urgency } from '../../shared/protocol.ts'
 import { MAIN_STATUSES, canTransition, completedDisplayLimitOf } from '../../shared/protocol.ts'
@@ -153,6 +153,37 @@ export function groupAndSortTasksByWorkspace(
   })
 
   return list
+}
+
+/**
+ * Peel the leading emoji off a label.
+ *
+ * The i18n labels carry their own icon ("👥 员工"), so rendering the label
+ * inline made every row start at a different x. Splitting the icon out lets the
+ * menu reserve one fixed icon column and keep the TEXT aligned.
+ * @param label - the localized label.
+ */
+function splitLeadingEmoji(label: string): { icon: string; text: string } {
+  const match = /^([^\p{L}\p{N}]+?)\s+(.+)$/u.exec(label)
+  if (match === null) return { icon: '', text: label }
+  return { icon: (match[1] ?? '').trim(), text: match[2] ?? label }
+}
+
+/**
+ * One popover row: [check][icon][label].
+ *
+ * `selected` draws the checkmark in its own column so a selected row does not
+ * shift its label.
+ */
+function MenuOption({ label, selected, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; selected?: boolean }) {
+  const { icon, text } = splitLeadingEmoji(label)
+  return (
+    <button type="button" className="dsh-atb-newmenu-opt" data-selected={selected === true} {...rest}>
+      <span className="dsh-atb-opt-check" aria-hidden>{selected === true ? '✓' : ''}</span>
+      <span className="dsh-atb-opt-icon" aria-hidden>{icon}</span>
+      <span className="dsh-atb-opt-text">{text}</span>
+    </button>
+  )
 }
 
 /**
@@ -407,46 +438,42 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
               <div className="dsh-atb-newmenu-backdrop" onClick={() => setScopeOpen(false)} />
               <div className="dsh-atb-newmenu-menu" data-kind="scope-menu">
                 <div className="dsh-atb-menu-label">{t('board.filter.scopeProject')}</div>
-                <button
-                  type="button"
-                  className="dsh-atb-newmenu-opt"
+                <MenuOption
+                  label={`🏠 ${t('board.filter.allProjects')}`}
+                  selected={state.filters.workspaceId === undefined}
                   data-scope="project"
                   data-value=""
-                  data-selected={state.filters.workspaceId === undefined}
                   onClick={() => { setScopeOpen(false); controller.setWorkspaceFilter(undefined) }}
-                >{t('board.filter.allProjects')}</button>
+                />
                 {state.workspaces.map(ws => (
-                  <button
+                  <MenuOption
                     key={ws.id}
-                    type="button"
-                    className="dsh-atb-newmenu-opt"
+                    label={`📁 ${ws.title || ws.path}`}
+                    selected={state.filters.workspaceId === ws.id}
                     data-scope="project"
                     data-value={ws.id}
-                    data-selected={state.filters.workspaceId === ws.id}
                     onClick={() => { setScopeOpen(false); controller.setWorkspaceFilter(ws.id) }}
-                  >{ws.title || ws.path}</button>
+                  />
                 ))}
                 {epicOptions.length > 0 && (
                   <>
                     <div className="dsh-atb-menu-label" title={t('board.filter.parentTitle')}>{t('board.filter.scopeEpic')}</div>
-                    <button
-                      type="button"
-                      className="dsh-atb-newmenu-opt"
+                    <MenuOption
+                      label={`📋 ${t('board.filter.parentAll')}`}
+                      selected={state.parentFilter === undefined}
                       data-scope="epic"
                       data-value=""
-                      data-selected={state.parentFilter === undefined}
                       onClick={() => { setScopeOpen(false); controller.setParentFilter(undefined) }}
-                    >{t('board.filter.parentAll')}</button>
+                    />
                     {epicOptions.map(epic => (
-                      <button
+                      <MenuOption
                         key={externalIssueRef(epic.repo, epic.number)}
-                        type="button"
-                        className="dsh-atb-newmenu-opt"
+                        label={`📋 #${epic.number} ${epic.title}`}
+                        selected={state.parentFilter === epic.number}
                         data-scope="epic"
                         data-value={String(epic.number)}
-                        data-selected={state.parentFilter === epic.number}
                         onClick={() => { setScopeOpen(false); controller.setParentFilter(epic.number) }}
-                      >{`#${epic.number} ${epic.title}`}</button>
+                      />
                     ))}
                   </>
                 )}
@@ -499,14 +526,13 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                 </button>
                 <div className="dsh-atb-menu-label">{t('board.sort.title')}</div>
                 {(['default', 'updated', 'urgency', 'created', 'title'] as const).map(key => (
-                  <button
+                  <MenuOption
                     key={key}
-                    type="button"
-                    className="dsh-atb-newmenu-opt"
+                    label={`🔀 ${t(`board.sort.${key === 'title' ? 'byTitle' : key}`)}`}
+                    selected={state.sortBy === key}
                     data-sort={key}
-                    data-selected={state.sortBy === key}
                     onClick={() => controller.setSortBy(key)}
-                  >{t(`board.sort.${key === 'title' ? 'byTitle' : key}`)}</button>
+                  />
                 ))}
               </div>
             </>
@@ -525,13 +551,13 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             <>
               <div className="dsh-atb-newmenu-backdrop" onClick={() => setActionsOpen(false)} />
               <div className="dsh-atb-newmenu-menu" data-kind="more-actions-menu">
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="employees" title={t('board.action.employeesTitle')} onClick={() => { setActionsOpen(false); controller.openEmployees() }}>{t('board.action.employees')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="settings" title={t('board.action.settingsTitle')} onClick={() => { setActionsOpen(false); controller.openSettings() }}>{t('board.action.settings')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="diag" title={t('board.action.diagTitle')} onClick={() => { setActionsOpen(false); controller.openDiagnostics() }}>{t('board.action.diag')}</button>
+                <MenuOption label={t('board.action.employees')} data-action="employees" title={t('board.action.employeesTitle')} onClick={() => { setActionsOpen(false); controller.openEmployees() }} />
+                <MenuOption label={t('board.action.settings')} data-action="settings" title={t('board.action.settingsTitle')} onClick={() => { setActionsOpen(false); controller.openSettings() }} />
+                <MenuOption label={t('board.action.diag')} data-action="diag" title={t('board.action.diagTitle')} onClick={() => { setActionsOpen(false); controller.openDiagnostics() }} />
                 <div className="dsh-atb-newmenu-sep" />
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="import" title={t('board.action.importTitle')} onClick={() => { setActionsOpen(false); controller.openImport() }}>{t('board.action.import')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-json" title={t('board.export.jsonTitle')} onClick={() => { setActionsOpen(false); void controller.exportJson() }}>{t('board.export.json')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-csv" title={t('board.export.csvTitle')} onClick={() => { setActionsOpen(false); void controller.exportCsv() }}>{t('board.export.csv')}</button>
+                <MenuOption label={t('board.action.import')} data-action="import" title={t('board.action.importTitle')} onClick={() => { setActionsOpen(false); controller.openImport() }} />
+                <MenuOption label={t('board.export.json')} data-action="export-json" title={t('board.export.jsonTitle')} onClick={() => { setActionsOpen(false); void controller.exportJson() }} />
+                <MenuOption label={t('board.export.csv')} data-action="export-csv" title={t('board.export.csvTitle')} onClick={() => { setActionsOpen(false); void controller.exportCsv() }} />
                 <div className="dsh-atb-newmenu-sep" />
                 <div className="dsh-atb-menu-label" data-kind="version">
                   <a className="dsh-atb-ver" href="https://github.com/cloader/dsh-taskboard" target="_blank" rel="noopener noreferrer">V{PLUGIN_VERSION}</a>

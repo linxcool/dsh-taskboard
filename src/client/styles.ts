@@ -85,6 +85,19 @@ button[class*="panelRow"]:has(.dsh-atb-pglyph) { position: relative; }
   font-size: 11px; color: var(--dsw-text-secondary, gray); padding: 7px 8px 3px; white-space: nowrap;
 }
 .dsh-atb-newmenu-opt[data-selected="true"] { color: var(--dsw-alias-label-primary, inherit); font-weight: 600; }
+/* Menu rows: [check][icon][label]. The fixed icon column is what keeps every
+   label starting at the same x (labels carry their emoji in the i18n string;
+   rendered inline they were ragged). */
+.dsh-atb-newmenu-opt,
+.dsh-atb-newmenu-menu .dsh-atb-newmenu-opt {
+  display: flex; align-items: center; gap: 6px; text-align: left;
+}
+.dsh-atb-opt-check { flex: none; width: 12px; font-size: 11px; opacity: .85; }
+.dsh-atb-opt-icon {
+  flex: none; width: 18px; display: inline-flex; justify-content: center;
+  font-size: 13px; line-height: 1;
+}
+.dsh-atb-opt-text { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .dsh-atb-filterbar {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 12px 0;
 }

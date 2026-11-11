@@ -88,6 +88,24 @@ describe('toolbar layout A', () => {
     for (const entry of menu.querySelectorAll('[data-action]')) {
       expect(entry.textContent ?? '').not.toMatch(/(👥|⚙|🩺|⬆|⬇|🐙|🙋)\s*\1/)
     }
+    // Every row reserves the same icon column so the LABELS line up, and each
+    // row actually has an icon (export used to be the only pair without one).
+    for (const entry of menu.querySelectorAll('[data-action]')) {
+      expect(entry.querySelector('.dsh-atb-opt-icon')?.textContent?.trim()).toBeTruthy()
+      expect(entry.querySelector('.dsh-atb-opt-text')?.textContent?.trim()).toBeTruthy()
+    }
+  })
+
+  it('reserves the icon column in the scope menu too', async () => {
+    const view = await mount()
+    await view.click(view.host.querySelector('[data-kind="scope"]'))
+    await waitFor(() => view.host.querySelector('[data-kind="scope-menu"]') !== null)
+    const rows = view.host.querySelectorAll('[data-scope]')
+    expect(rows.length).toBeGreaterThan(2)
+    for (const row of rows) {
+      expect(row.querySelector('.dsh-atb-opt-icon')).not.toBeNull()
+      expect(row.querySelector('.dsh-atb-opt-text')?.textContent?.trim()).toBeTruthy()
+    }
   })
 
   it('drives the views from one segmented control', async () => {
