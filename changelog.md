@@ -9,6 +9,7 @@
 - **子任务/史诗与关闭归档**：导入时读取 sub-issue 关系，根问题且有子项作为「父任务」筛选维度（不建卡，筛出全部后代）；有父级的 issue 正常建卡；来源 issue 关闭后自动归档（在途执行时延后）。
 - **建卡即建 Issue**：看板设置新增开关（默认关），打开后新建任务会在 GitHub 建 issue、加入 Project 并按状态设置 Status；仓库按项目映射自动选择，失败只在卡片留言。
 - **跨项目规范仓库（只读）**：看板设置可指定一个存放跨项目约定/模板的仓库，开场 framing 只加一行只读指针（AGENTS.md / cross-repo-contracts.md）；执行目录与写边界不变，跨仓库改动拆子任务卡。
+- **工具栏重排（方案 A）**：一行完成——视图改成分段控件（看板/待我处理/其它任务）、项目与父任务合并成「范围」、紧急度与来源收进「筛选」并显示计数徽标、员工/设置/诊断/导入/导出/版本收进「⋯」、搜索收成 🔍 点击展开；筛选生效时第二行出现可移除的 chips 与「清除全部」。
 - **员工绑定与会话槽位**：员工角色/权限改为显式绑定（含一次性迁移），建卡与 `taskboard_create` 共用权限解析，换 preset 时只重算未被手改过的权限；评审卡改为由默认评审员工执行；卡片新增按会话聚合的会话列表与「开会话」编排入口；详情页可直接改执行员工。
 
 **English:**
@@ -20,6 +21,7 @@
 - **Sub-issues, epics and closing**: import reads the sub-issue tree; a root issue with children becomes an epic filter facet (no card, filters all descendants) while issues with a parent become cards; a closed source issue archives its card automatically (delayed while a run is live).
 - **Create the issue with the card**: a new board setting (off by default) makes every created task open a GitHub issue, add it to the Project and set its status; the repo comes from the project mapping and failures are reported on the card.
 - **Cross-project norms repo (read-only)**: a board setting names a repository holding shared conventions; the framing only adds a read-only pointer to its AGENTS.md / cross-repo-contracts.md, while the execution directory and write boundary stay with the task's own project. Cross-repo work is split into sub-issue cards.
+- **Toolbar layout A**: one row — views as a segmented control (board / needs me / other), project + epic merged into "Scope", urgency and source moved into "Filters" with a count badge, employees/settings/diagnostics/import/export/version moved into "⋯", search collapsed behind an icon; active filters appear as removable chips with "Clear all".
 - **Employee bindings and session slot**: employee role/permission are explicit bindings (with a one-shot migration) shared by the create form and `taskboard_create`; changing a preset only recomputes an untouched permission. Review cards now run as the default reviewer, cards gain a per-session list plus an "open session" composer, and the detail pane can reassign the executing employee.
 ### 0.9.11 — 2026-11-05
 

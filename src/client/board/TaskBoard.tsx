@@ -203,6 +203,13 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
   })()
   const parentMap = state.parentFilter === undefined ? undefined : parentsByIssue(state.ledger.tasks)
   const activeFilterCount = state.filters.urgencies.length + (state.filters.externalOnly === true ? 1 : 0)
+  // The scope button shows the current narrowing without opening the menu.
+  const scopeActive = state.filters.workspaceId !== undefined || state.parentFilter !== undefined
+  const scopeLabelText = state.filters.workspaceId !== undefined
+    ? (state.workspaces.find(ws => ws.id === state.filters.workspaceId)?.title || state.filters.workspaceId)
+    : state.parentFilter !== undefined
+      ? `#${state.parentFilter}`
+      : ''
   const visibleLive = state.parentFilter === undefined || parentMap === undefined
     ? live
     : live.filter(task => isDescendantOf(task, state.parentFilter!, parentMap))
@@ -241,18 +248,83 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
   // + 新建任务 ▼ dropdown (0.4.0): blank / templates / manage / import.
   const [newMenuOpen, setNewMenuOpen] = useState(false)
   const closeMenu = (): void => setNewMenuOpen(false)
-  // ⬇ 导出 ▼ dropdown (0.5.1): whole-ledger JSON backup or task-list CSV.
-  const [exportOpen, setExportOpen] = useState(false)
-  const closeExport = (): void => setExportOpen(false)
+  // Layout A: one scope picker (project + epic), an overflow menu, and a
+  // search field that stays collapsed behind an icon until asked for.
+  const [scopeOpen, setScopeOpen] = useState(false)
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(state.search.trim().length > 0)
+  const searchRef = useRef<HTMLInputElement>(null)
   // Fold/expand toggle for completed tasks (0.8.8)
   const [doneExpanded, setDoneExpanded] = useState(false)
+
+  // Filter chips: everything currently narrowing the board, each removable.
+  const activeChips: Array<{ key: string; label: string; value: string; onRemove: () => void }> = []
+  if (state.filters.workspaceId !== undefined) {
+    const ws = state.workspaces.find(candidate => candidate.id === state.filters.workspaceId)
+    activeChips.push({
+      key: 'project', label: t('board.chip.project'), value: ws?.title || ws?.path || state.filters.workspaceId,
+      onRemove: () => controller.setWorkspaceFilter(undefined),
+    })
+  }
+  if (state.parentFilter !== undefined) {
+    const epic = epicOptions.find(candidate => candidate.number === state.parentFilter)
+    activeChips.push({
+      key: 'epic', label: t('board.chip.parent'), value: epic === undefined ? `#${state.parentFilter}` : `#${epic.number} ${epic.title}`,
+      onRemove: () => controller.setParentFilter(undefined),
+    })
+  }
+  for (const urgency of state.filters.urgencies) {
+    activeChips.push({
+      key: `urgency:${urgency}`, label: t('board.chip.urgency'), value: t(URGENCY_KEYS[urgency]),
+      onRemove: () => controller.toggleUrgency(urgency),
+    })
+  }
+  if (state.filters.externalOnly === true) {
+    activeChips.push({ key: 'source', label: t('board.chip.source'), value: t('board.filter.external'), onRemove: () => controller.toggleExternalOnly() })
+  }
+  const clearAllFilters = (): void => {
+    controller.setWorkspaceFilter(undefined)
+    controller.setParentFilter(undefined)
+    for (const urgency of [...state.filters.urgencies]) controller.toggleUrgency(urgency)
+    if (state.filters.externalOnly === true) controller.toggleExternalOnly()
+  }
 
   return (
     <div className="dsh-atb-board">
       <div className="dsh-atb-toolbar">
         <h2 className="dsh-atb-title">{t('board.title')}</h2>
-        <span className="dsh-atb-count">{t('board.count.tasks', { n: visibleLive.length, rev: state.ledger.revision })}</span>
-        <div className="dsh-atb-newmenu">
+        <span className="dsh-atb-count">{visibleLive.length}</span>
+        <span className="dsh-atb-rev" title={t('board.rev.title', { rev: state.ledger.revision })}>rev {state.ledger.revision}</span>
+        {/* Layout A: the three VIEWS are one segmented control, separate from filters. */}
+        <div className="dsh-atb-seg" role="group" aria-label={t('board.view.title')}>
+          <button
+            type="button"
+            data-kind="view-board"
+            data-on={!onlyNeedsHuman && !state.secondaryOpen}
+            onClick={() => {
+              if (state.secondaryOpen) controller.toggleSecondary()
+              if (onlyNeedsHuman) setOnlyNeedsHuman(false)
+            }}
+          >{t('board.view.board')}</button>
+          <button
+            type="button"
+            data-kind="needs-human-filter"
+            data-on={onlyNeedsHuman}
+            aria-pressed={onlyNeedsHuman}
+            title={t('board.filter.needsHumanTitle')}
+            onClick={() => {
+              if (!onlyNeedsHuman && state.secondaryOpen) controller.toggleSecondary()
+              setOnlyNeedsHuman(!onlyNeedsHuman)
+            }}
+          >{t('board.filter.needsHuman')}{needsHumanCount > 0 ? ` (${needsHumanCount})` : ''}</button>
+          <button
+            type="button"
+            data-kind="view-other"
+            data-on={state.secondaryOpen}
+            onClick={() => controller.toggleSecondary()}
+          >{t('board.action.otherTasks')}</button>
+        </div>
+        <div className="dsh-atb-newmenu dsh-atb-new-task">
           <button
             type="button"
             className="dsh-atb-btn"
@@ -297,158 +369,191 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
           )}
         </div>
         <div className="dsh-atb-spacer" />
-        <input
-          className="dsh-atb-input dsh-atb-search"
-          value={state.search}
-          placeholder={t('board.search.placeholder')}
-          spellCheck={false}
-          onChange={e => controller.setSearch(e.target.value)}
-        />
-        <select
-          className="dsh-atb-select"
-          value={state.filters.workspaceId ?? ''}
-          onChange={e => controller.setWorkspaceFilter(e.target.value === '' ? undefined : e.target.value)}
-        >
-          <option value="">{t('board.filter.allProjects')}</option>
-          {state.workspaces.map(ws => <option key={ws.id} value={ws.id}>{ws.title || ws.path}</option>)}
-        </select>
-        {epicOptions.length > 0 && (
-          <select
-            className="dsh-atb-select dsh-atb-parent-filter"
-            value={state.parentFilter ?? ''}
-            title={t('board.filter.parentTitle')}
-            onChange={e => controller.setParentFilter(e.target.value === '' ? undefined : Number(e.target.value))}
-          >
-            <option value="">{t('board.filter.parentAll')}</option>
-            {epicOptions.map(epic => (
-              <option key={externalIssueRef(epic.repo, epic.number)} value={epic.number}>
-                {`#${epic.number} ${epic.title}`}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          className="dsh-atb-select"
-          value={state.sortBy}
-          title={t('board.sort.title')}
-          onChange={e => controller.setSortBy(e.target.value as typeof state.sortBy)}
-        >
-          <option value="default">{t('board.sort.default')}</option>
-          <option value="updated">{t('board.sort.updated')}</option>
-          <option value="urgency">{t('board.sort.urgency')}</option>
-          <option value="created">{t('board.sort.created')}</option>
-          <option value="title">{t('board.sort.byTitle')}</option>
-        </select>
+        {/* Search collapses to an icon (layout A). The input stays mounted so
+            typing state and tests do not depend on the animation finishing. */}
+        <div className="dsh-atb-searchwrap" data-kind="search" data-expanded={searchOpen}>
+          <button
+            type="button"
+            className="dsh-atb-btn"
+            data-kind="search-toggle"
+            title={t('board.search.toggle')}
+            onClick={() => {
+              setSearchOpen(true)
+              queueMicrotask(() => searchRef.current?.focus())
+            }}
+          >🔍</button>
+          <input
+            ref={searchRef}
+            className="dsh-atb-input dsh-atb-search"
+            value={state.search}
+            placeholder={t('board.search.placeholder')}
+            spellCheck={false}
+            onChange={e => controller.setSearch(e.target.value)}
+            onBlur={() => { if (state.search.trim().length === 0) setSearchOpen(false) }}
+          />
+        </div>
+        {/* Scope = project + epic in ONE picker (layout A). */}
+        <div className="dsh-atb-newmenu">
+          <button
+            type="button"
+            className="dsh-atb-btn"
+            data-kind="scope"
+            data-on={state.filters.workspaceId !== undefined || state.parentFilter !== undefined}
+            aria-expanded={scopeOpen}
+            onClick={() => setScopeOpen(open => !open)}
+          >{t('board.filter.scope')}{scopeActive ? `：${scopeLabelText}` : ''} <span className="dsh-atb-caret">▾</span></button>
+          {scopeOpen && (
+            <>
+              <div className="dsh-atb-newmenu-backdrop" onClick={() => setScopeOpen(false)} />
+              <div className="dsh-atb-newmenu-menu" data-kind="scope-menu">
+                <div className="dsh-atb-menu-label">{t('board.filter.scopeProject')}</div>
+                <button
+                  type="button"
+                  className="dsh-atb-newmenu-opt"
+                  data-scope="project"
+                  data-value=""
+                  data-selected={state.filters.workspaceId === undefined}
+                  onClick={() => { setScopeOpen(false); controller.setWorkspaceFilter(undefined) }}
+                >{t('board.filter.allProjects')}</button>
+                {state.workspaces.map(ws => (
+                  <button
+                    key={ws.id}
+                    type="button"
+                    className="dsh-atb-newmenu-opt"
+                    data-scope="project"
+                    data-value={ws.id}
+                    data-selected={state.filters.workspaceId === ws.id}
+                    onClick={() => { setScopeOpen(false); controller.setWorkspaceFilter(ws.id) }}
+                  >{ws.title || ws.path}</button>
+                ))}
+                {epicOptions.length > 0 && (
+                  <>
+                    <div className="dsh-atb-menu-label" title={t('board.filter.parentTitle')}>{t('board.filter.scopeEpic')}</div>
+                    <button
+                      type="button"
+                      className="dsh-atb-newmenu-opt"
+                      data-scope="epic"
+                      data-value=""
+                      data-selected={state.parentFilter === undefined}
+                      onClick={() => { setScopeOpen(false); controller.setParentFilter(undefined) }}
+                    >{t('board.filter.parentAll')}</button>
+                    {epicOptions.map(epic => (
+                      <button
+                        key={externalIssueRef(epic.repo, epic.number)}
+                        type="button"
+                        className="dsh-atb-newmenu-opt"
+                        data-scope="epic"
+                        data-value={String(epic.number)}
+                        data-selected={state.parentFilter === epic.number}
+                        onClick={() => { setScopeOpen(false); controller.setParentFilter(epic.number) }}
+                      >{`#${epic.number} ${epic.title}`}</button>
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
         <div className="dsh-atb-newmenu">
           <button
             type="button"
             className="dsh-atb-btn"
             data-kind="more-filter"
+            data-on={activeFilterCount > 0}
             aria-expanded={moreFiltersOpen}
             title={t('board.filter.moreTitle')}
             onClick={() => setMoreFiltersOpen(open => !open)}
           >
-            {t('board.filter.more')}
-            {activeFilterCount > 0 ? ` ·${activeFilterCount}` : ''}
+            🧰 {t('board.filter.more')}
+            {activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
           </button>
           {moreFiltersOpen && (
             <>
               <div className="dsh-atb-newmenu-backdrop" onClick={() => setMoreFiltersOpen(false)} />
               <div className="dsh-atb-newmenu-menu dsh-atb-more-menu" data-kind="more-menu">
-              <div className="dsh-atb-more-row">
-                {(['urgent', 'normal', 'relaxed'] as const).map(u => (
+                <div className="dsh-atb-more-row">
+                  {(['urgent', 'normal', 'relaxed'] as const).map(u => (
+                    <button
+                      key={u}
+                      type="button"
+                      className="dsh-atb-chip"
+                      data-urgency={u}
+                      data-on={state.filters.urgencies.includes(u)}
+                      onClick={() => controller.toggleUrgency(u)}
+                    >
+                      <span className="dsh-atb-dot" data-urgency={u} />
+                      {t(URGENCY_KEYS[u])}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="dsh-atb-chip"
+                  data-kind="external-filter"
+                  data-on={state.filters.externalOnly === true}
+                  aria-pressed={state.filters.externalOnly === true}
+                  title={t('board.filter.externalTitle')}
+                  onClick={() => controller.toggleExternalOnly()}
+                >
+                  🐙 {t('board.filter.external')}
+                </button>
+                <div className="dsh-atb-menu-label">{t('board.sort.title')}</div>
+                {(['default', 'updated', 'urgency', 'created', 'title'] as const).map(key => (
                   <button
-                    key={u}
+                    key={key}
                     type="button"
-                    className="dsh-atb-chip"
-                    data-urgency={u}
-                    data-on={state.filters.urgencies.includes(u)}
-                    onClick={() => controller.toggleUrgency(u)}
-                  >
-                    <span className="dsh-atb-dot" data-urgency={u} />
-                    {t(URGENCY_KEYS[u])}
-                  </button>
+                    className="dsh-atb-newmenu-opt"
+                    data-sort={key}
+                    data-selected={state.sortBy === key}
+                    onClick={() => controller.setSortBy(key)}
+                  >{t(`board.sort.${key === 'title' ? 'byTitle' : key}`)}</button>
                 ))}
-              </div>
-              <button
-                type="button"
-                className="dsh-atb-chip"
-                data-kind="external-filter"
-                data-on={state.filters.externalOnly === true}
-                aria-pressed={state.filters.externalOnly === true}
-                title={t('board.filter.externalTitle')}
-                onClick={() => controller.toggleExternalOnly()}
-              >
-                🐙 {t('board.filter.external')}
-              </button>
               </div>
             </>
           )}
         </div>
-        <button
-          type="button"
-          className="dsh-atb-chip"
-          data-kind="needs-human-filter"
-          data-on={onlyNeedsHuman}
-          aria-pressed={onlyNeedsHuman}
-          style={onlyNeedsHuman ? { background: "#f59e0b", color: "#fff", borderColor: "#d97706", fontWeight: 600 } : undefined}
-          title={t("board.filter.needsHumanTitle")}
-          onClick={() => {
-            if (!onlyNeedsHuman && state.secondaryOpen) controller.toggleSecondary()
-            setOnlyNeedsHuman(!onlyNeedsHuman)
-          }}
-        >
-          🙋 {t("board.filter.needsHuman")} {needsHumanCount > 0 ? `(${needsHumanCount})` : ""}
-        </button>
-        <button type="button" className="dsh-atb-btn" onClick={() => controller.toggleSecondary()}>
-          {state.secondaryOpen ? t('board.action.backToBoard') : t('board.action.otherTasks')}
-        </button>
-        <button type="button" className="dsh-atb-btn" title={t('board.action.employeesTitle')} onClick={() => controller.openEmployees()}>{t('board.action.employees')}</button>
-        <button type="button" className="dsh-atb-btn" title={t('board.action.settingsTitle')} onClick={() => controller.openSettings()}>{t('board.action.settings')}</button>
-        <button type="button" className="dsh-atb-btn" title={t('board.action.diagTitle')} onClick={() => controller.openDiagnostics()}>{t('board.action.diag')}</button>
-        <button type="button" className="dsh-atb-btn" title={t('board.action.importTitle')} onClick={() => controller.openImport()}>{t('board.action.import')}</button>
+        {/* Overflow: admin actions and the version live here, not on the bar. */}
         <div className="dsh-atb-newmenu">
           <button
             type="button"
-            className="dsh-atb-btn"
-            title={t('board.action.exportTitle')}
-            onClick={() => setExportOpen(!exportOpen)}
-          >
-            {t('board.action.export')}
-          </button>
-          {exportOpen && (
+            className="dsh-atb-btn dsh-atb-btn-icon"
+            data-kind="more-actions"
+            title={t('board.menu.more')}
+            onClick={() => setActionsOpen(open => !open)}
+          >⋯</button>
+          {actionsOpen && (
             <>
-              <div className="dsh-atb-newmenu-backdrop" onClick={closeExport} />
-              <div className="dsh-atb-newmenu-list">
-                <button
-                  type="button"
-                  className="dsh-atb-newmenu-opt"
-                  title={t('board.export.jsonTitle')}
-                  onClick={() => { closeExport(); void controller.exportJson() }}
-                >
-                  {t('board.export.json')}
-                </button>
-                <button
-                  type="button"
-                  className="dsh-atb-newmenu-opt"
-                  title={t('board.export.csvTitle')}
-                  onClick={() => { closeExport(); void controller.exportCsv() }}
-                >
-                  {t('board.export.csv')}
-                </button>
+              <div className="dsh-atb-newmenu-backdrop" onClick={() => setActionsOpen(false)} />
+              <div className="dsh-atb-newmenu-menu" data-kind="more-actions-menu">
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="employees" title={t('board.action.employeesTitle')} onClick={() => { setActionsOpen(false); controller.openEmployees() }}>👥 {t('board.action.employees')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="settings" title={t('board.action.settingsTitle')} onClick={() => { setActionsOpen(false); controller.openSettings() }}>⚙ {t('board.action.settings')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="diag" title={t('board.action.diagTitle')} onClick={() => { setActionsOpen(false); controller.openDiagnostics() }}>🩺 {t('board.action.diag')}</button>
+                <div className="dsh-atb-newmenu-sep" />
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="import" title={t('board.action.importTitle')} onClick={() => { setActionsOpen(false); controller.openImport() }}>⬆ {t('board.action.import')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-json" title={t('board.export.jsonTitle')} onClick={() => { setActionsOpen(false); void controller.exportJson() }}>⬇ {t('board.export.json')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-csv" title={t('board.export.csvTitle')} onClick={() => { setActionsOpen(false); void controller.exportCsv() }}>⬇ {t('board.export.csv')}</button>
+                <div className="dsh-atb-newmenu-sep" />
+                <div className="dsh-atb-menu-label" data-kind="version">
+                  <a className="dsh-atb-ver" href="https://github.com/cloader/dsh-taskboard" target="_blank" rel="noopener noreferrer">V{PLUGIN_VERSION}</a>
+                </div>
               </div>
             </>
           )}
         </div>
-        <a
-          className="dsh-atb-ver"
-          href="https://github.com/cloader/dsh-taskboard"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          V{PLUGIN_VERSION}
-        </a>
+
       </div>
+
+      {activeChips.length > 0 && (
+        <div className="dsh-atb-filterbar" data-kind="filter-bar">
+          {activeChips.map(chip => (
+            <span key={chip.key} className="dsh-atb-filterchip" data-kind="filter-chip" data-chip={chip.key}>
+              <span className="dsh-atb-filterchip-label">{chip.label}</span> <b>{chip.value}</b>
+              <button type="button" className="dsh-atb-filterchip-x" aria-label={t('board.chip.remove')} onClick={chip.onRemove}>×</button>
+            </span>
+          ))}
+          <button type="button" className="dsh-atb-filterclear" data-kind="filter-clear" onClick={clearAllFilters}>{t('board.chip.clear')}</button>
+        </div>
+      )}
 
       {state.error !== undefined && <div className="dsh-atb-error">{state.error}</div>}
 

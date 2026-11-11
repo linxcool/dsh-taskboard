@@ -69,37 +69,40 @@ async function mount() {
   cleanups.push(() => { root.unmount(); host.remove() })
   root.render(React.createElement(TaskBoard, { controller }))
   await waitFor(() => host.querySelectorAll('.dsh-atb-card').length === 4)
-  const filter = () => host.querySelector<HTMLSelectElement>('.dsh-atb-parent-filter')!
+  const openScope = async () => {
+    await React.act(async () => { host.querySelector<HTMLButtonElement>('[data-kind="scope"]')!.click() })
+    await waitFor(() => host.querySelector('[data-kind="scope-menu"]') !== null)
+    return host.querySelector('[data-kind="scope-menu"]')!
+  }
+  const pickEpic = async (value: string) => {
+    const menu = await openScope()
+    const option = menu.querySelector<HTMLButtonElement>(`[data-scope="epic"][data-value="${value}"]`)!
+    await React.act(async () => { option.click() })
+  }
   const titles = () => [...host.querySelectorAll('.dsh-atb-card')].map(card => card.textContent ?? '')
-  return { host, controller, filter, titles }
+  return { host, controller, openScope, pickEpic, titles }
 }
 
 describe('epic filter', () => {
   it('lists the epics from the sync record', async () => {
     const view = await mount()
-    const options = [...view.filter().options].map(option => option.value)
-    expect(options).toEqual(['', '16', '17'])
-    expect(view.filter().textContent).toContain('M2 里程碑')
+    const menu = await view.openScope()
+    const values = [...menu.querySelectorAll<HTMLButtonElement>('[data-scope="epic"]')].map(button => button.dataset.value)
+    expect(values).toEqual(['', '16', '17'])
+    expect(menu.textContent).toContain('M2 里程碑')
   })
 
   it('shows every card by default and only descendants once an epic is chosen', async () => {
     const view = await mount()
     expect(view.titles()).toHaveLength(4)
 
-    const setValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!
-    await React.act(async () => {
-      setValue.call(view.filter(), '16')
-      view.filter().dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await view.pickEpic('16')
     // #5 plus its grandchildren #8/#9; #20 belongs to the other epic.
     await waitFor(() => view.titles().length === 3)
     expect(view.controller.getSnapshot().parentFilter).toBe(16)
     expect(view.titles().some(text => text.includes('Issue 20'))).toBe(false)
 
-    await React.act(async () => {
-      setValue.call(view.filter(), '')
-      view.filter().dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await view.pickEpic('')
     await waitFor(() => view.titles().length === 4)
   })
 })

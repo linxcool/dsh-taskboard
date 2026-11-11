@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>看板顶部工具栏 · 交互稿</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --line: #e3e6ea;
+    --line-strong: #cfd4db;
+    --text: #1f2328;
+    --muted: #6b7280;
+    --faint: #9aa1aa;
+    --accent: #2f6fdd;
+    --accent-soft: rgba(47,111,221,.10);
+    --warn: #b45309;
+    --ok: #2e9e6b;
+    --col-bg: #f1f3f6;
+    --radius: 10px;
+    --shadow: 0 10px 28px rgba(20,24,31,.12), 0 2px 6px rgba(20,24,31,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- 稿纸外壳 ---------- */
+  .doc { max-width: 1180px; margin: 0 auto; padding: 22px 20px 60px; }
+  .doc h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .2px; }
+  .doc .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 16px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tab {
+    border: 1px solid var(--line-strong); background: var(--panel); border-radius: 999px;
+    padding: 5px 12px; cursor: pointer; font-size: 12.5px; color: var(--muted);
+  }
+  .tab[data-on="true"] { background: var(--text); border-color: var(--text); color: #fff; }
+  .tab span { opacity: .75; margin-left: 4px; }
+
+  .stage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(20,24,31,.04);
+  }
+  .stage-note { padding: 10px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); background: #fbfcfd; }
+  .stage-note b { color: var(--text); font-weight: 600; }
+
+  /* ---------- 看板骨架 ---------- */
+  .board { padding: 14px 14px 22px; background: var(--bg); }
+  .cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .col { background: var(--col-bg); border-radius: 10px; padding: 8px; min-height: 300px; }
+  .col-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding: 2px 2px 8px; }
+  .col-head b { color: var(--text); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot[data-s="backlog"] { background: #94a3b8; }
+  .dot[data-s="todo"] { background: #2f6fdd; }
+  .dot[data-s="in_progress"] { background: #e08a2e; }
+  .dot[data-s="in_review"] { background: #8b5cf6; }
+  .dot[data-s="done"] { background: #22a06b; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 9px; margin-bottom: 8px; box-shadow: 0 1px 1px rgba(20,24,31,.03);
+  }
+  .card .t { font-size: 12.5px; line-height: 1.45; }
+  .card .m { margin-top: 6px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); flex-wrap: wrap; }
+  .badge { border: 1px solid var(--line-strong); border-radius: 999px; padding: 0 6px; font-size: 10.5px; color: var(--muted); }
+  .badge[data-kind="warn"] { color: var(--warn); border-color: rgba(180,83,9,.35); background: rgba(180,83,9,.07); }
+  .ghost { border-style: dashed; color: var(--muted); }
+
+  /* ---------- 工具栏通用零件 ---------- */
+  .tb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tb .spacer { flex: 1 1 auto; }
+  .tb-title { display: flex; align-items: baseline; gap: 7px; }
+  .tb-title b { font-size: 15.5px; font-weight: 650; letter-spacing: .2px; }
+  .tb-title .count { font-size: 12px; color: var(--muted); }
+  .rev { font-size: 11px; color: var(--faint); cursor: help; border-bottom: 1px dotted var(--line-strong); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
+    cursor: pointer; font-size: 12.5px; white-space: nowrap;
+  }
+  .btn:hover { border-color: #b9bfc8; background: #fbfcfd; }
+  .btn[data-on="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .btn-primary { background: #1f2328; border-color: #1f2328; color: #fff; font-weight: 600; }
+  .btn-primary:hover { background: #2b3038; border-color: #2b3038; }
+  .btn-icon { width: 30px; justify-content: center; padding: 0; }
+  .caret { font-size: 9px; opacity: .55; }
+  .badge-n { background: var(--accent); color: #fff; border-radius: 999px; font-size: 10.5px; padding: 0 5px; line-height: 15px; }
+
+  .field { position: relative; display: inline-flex; align-items: center; }
+  .field input {
+    height: 30px; width: 190px; padding: 0 28px 0 28px; border-radius: 8px;
+    border: 1px solid var(--line-strong); background: var(--panel); font: inherit; font-size: 12.5px; color: inherit;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field .ico { position: absolute; left: 9px; color: var(--faint); font-size: 12px; }
+
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .seg button { border: 0; background: transparent; padding: 0 10px; height: 28px; cursor: pointer; font-size: 12.5px; color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[data-on="true"] { background: var(--text); color: #fff; }
+
+  .pop { position: relative; }
+  .pop-panel {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+    min-width: 230px; background: var(--panel); border: 1px solid var(--line-strong);
+    border-radius: 10px; box-shadow: var(--shadow); padding: 8px; display: none;
+  }
+  .pop[data-open="true"] .pop-panel { display: block; }
+  .pop-group { padding: 4px 4px 8px; }
+  .pop-group + .pop-group { border-top: 1px solid var(--line); padding-top: 8px; }
+  .pop-label { font-size: 11px; color: var(--faint); padding: 2px 6px 6px; letter-spacing: .3px; }
+  .opt {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    border: 0; background: transparent; border-radius: 7px; padding: 6px 7px; cursor: pointer; font-size: 12.5px;
+  }
+  .opt:hover { background: #f3f5f8; }
+  .opt[data-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+  .opt .k { margin-left: auto; font-size: 11px; color: var(--faint); }
+  .opt .check { width: 14px; color: var(--accent); }
+  .pop-foot { display: flex; gap: 6px; justify-content: flex-end; padding: 8px 4px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
+
+  /* 筛选 chips 行 */
+  .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 4px 0 8px;
+    border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel);
+    font-size: 11.5px; color: var(--muted);
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  .chip .x { border: 0; background: transparent; cursor: pointer; color: var(--faint); width: 18px; height: 18px; border-radius: 50%; }
+  .chip .x:hover { background: rgba(20,24,31,.08); color: var(--text); }
+  .chip-clear { border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 11.5px; }
+
+  /* 侧栏方案 */
+  .with-sidebar { display: grid; grid-template-columns: 226px minmax(0, 1fr); }
+  .side { border-right: 1px solid var(--line); background: #fbfcfd; padding: 12px; }
+  .side h5 { margin: 0 0 8px; font-size: 11px; letter-spacing: .5px; color: var(--faint); font-weight: 600; text-transform: uppercase; }
+  .side .sec + .sec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .side .opt { font-size: 12px; }
+
+  /* 说明气泡 */
+  .notes { display: none; margin-top: 10px; }
+  .body[data-notes="true"] .notes { display: block; }
+  .notes ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+  .notes li { margin: 3px 0; }
+  .notes b { color: var(--text); }
+  .hint { color: var(--faint); font-size: 11.5px; }
+</style>
+</head>
+<body class="body" data-notes="false">
+<div class="doc">
+  <h1>看板顶部工具栏 · 交互稿</h1>
+  <div class="sub">四套形态可切换：现状 / A 一行+抽屉 / B 两行重排 / C 侧栏筛选。所有下拉、chips 消除、筛选面板都可以真实点击。</div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" data-view="before" data-on="true">现状<span>14 控件</span></button>
+    <button class="tab" data-view="a" data-on="false">A 一行 + 抽屉<span>推荐</span></button>
+    <button class="tab" data-view="b" data-on="false">B 两行重排</button>
+    <button class="tab" data-view="c" data-on="false">C 侧栏筛选</button>
+    <button class="tab" data-view="notes" data-on="false" id="notesBtn">显示设计说明</button>
+  </div>
+
+  <div class="stage">
+    <div class="stage-note" id="stageNote"></div>
+    <div id="slot"></div>
+  </div>
+
+  <div class="notes" id="notes"></div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------- state */
+const state = {
+  view: 'project',            // 范围：project | epic
+  project: 'hdefense',
+  epic: '#16 M2｜小量投放与可回收策略验证',
+  sort: '默认排序',
+  urgencies: [],              // 已选紧急度
+  externalOnly: false,
+  viewMode: 'board',          // board | needs | other
+  needsCount: 19,
+  total: 31,
+  rev: 82,
+  open: null,                 // 当前打开的下拉 id
+};
+
+const EPICS = [
+  { id: '#15', name: 'M1｜Meta Instant Game 上架', n: 4 },
+  { id: '#16', name: 'M2｜小量投放与可回收策略验证', n: 8 },
+  { id: '#17', name: 'M3｜长线产品迭代', n: 9 },
+  { id: '#18', name: 'DH 接入平台能力', n: 9 },
+];
+const CARDS = {
+  backlog: [
+    { t: '经济与养成总账：金币曲线、碎片分工与付费深度重估', m: ['疑人工', '一般'], gh: '#39' },
+    { t: '根据玩家养成情况更新 Arena bots 配置', m: ['一般'], gh: '#22' },
+  ],
+  todo: [],
+  in_progress: [
+    { t: '整理 DH 数值规则与玩家路径，支撑商品价格和价值确认', m: ['疑人工', '一般'], gh: '#5' },
+    { t: 'DH 线上测试与投放准备', m: ['一般'], gh: '#45' },
+  ],
+  in_review: [{ t: '采集 DH 养成数据并落地数值工作簿', m: ['一般'], gh: '#8' }],
+  done: [{ t: 'DH Admin｜游戏分析新增「玩家分层」页签', m: ['完成'], gh: '#53' }],
+};
+
+const activeCount = () => state.urgencies.length + (state.externalOnly ? 1 : 0);
+const scopeLabel = () => state.view === 'project'
+  ? (state.project === 'all' ? '全部项目' : state.project)
+  : (state.epic === 'all' ? '全部父任务' : state.epic.split('｜')[0]);
+
+function chips() {
+  const out = [];
+  if (state.project !== 'all') out.push({ k: '项目', v: state.project, clear: () => state.project = 'all' });
+  if (state.epic !== 'all') out.push({ k: '父任务', v: state.epic.split('｜')[0], clear: () => state.epic = 'all' });
+  for (const u of [...state.urgencies]) out.push({ k: '紧急度', v: URG_LABEL[u], clear: () => state.urgencies = state.urgencies.filter(x => x !== u) });
+  if (state.externalOnly) out.push({ k: '来源', v: 'GitHub Issue', clear: () => state.externalOnly = false });
+  return out;
+}
+const URG_LABEL = { urgent: '紧急', normal: '一般', relaxed: '不急' };
+
+/* ---------------------------------------------------------------- 视图 */
+function columns() {
+  const col = (key, label, status) => `
+    <div class="col">
+      <div class="col-head"><span class="dot" data-s="${status}"></span><b>${label}</b><span>${CARDS[key].length}</span></div>
+      ${CARDS[key].map(c => `
+        <div class="card">
+          <div class="t">${c.t}</div>
+          <div class="m">
+            ${c.m.map(x => x === '疑人工' ? '<span class="badge" data-kind="warn">🙋 疑似等待人工</span>' : `<span class="badge">${x}</span>`).join('')}
+            <span>GitHub · issue ${c.gh}</span>
+            <span class="badge ghost">＋ 开会话</span>
+          </div>
+        </div>`).join('') || '<div class="hint" style="padding:6px 2px">无任务</div>'}
+    </div>`;
+  return `<div class="cols">
+    ${col('backlog', '待澄清', 'backlog')}
+    ${col('todo', '就绪', 'todo')}
+    ${col('in_progress', '执行中', 'in_progress')}
+    ${col('in_review', '待你验收', 'in_review')}
+    ${col('done', '完成', 'done')}
+  </div>`;
+}
+
+function pop(id, trigger, panel, extra = '') {
+  return `<div class="pop" data-open="${state.open === id}" data-pop="${id}" ${extra}>
+    <span data-toggle="${id}">${trigger}</span>
+    <div class="pop-panel">${panel}</div>
+  </div>`;
+}
+
+const scopePanel = () => `
+  <div class="pop-group">
+    <div class="pop-label">按项目</div>
+    <button class="opt" data-act="scope" data-kind="project" data-value="all" data-selected="${state.project === 'all' && state.view === 'project'}">
+      <span class="check">${state.project === 'all' && state.view === 'project' ? '✓' : ''}</span>全部项目</button>
+    <button class="opt" data-act="scope" data-kind="project" data-value="hdefense" data-selected="${state.project === 'hdefense' && state.view === 'project'}">
+      <span class="check">${state.project === 'hdefense' && state.view === 'project' ? '✓' : ''}</span>hdefense<span class="k">26</span></button>
+    <button class="opt" data-act="scope" data-kind="project" data-value="cloudflare" data-selected="${state.project === 'cloudflare' && state.view === 'project'}">
+      <span class="check">${state.project === 'cloudflare' && state.view === 'project' ? '✓' : ''}</span>cloudflare<span class="k">5</span></button>
+  </div>
+  <div class="pop-group">
+    <div class="pop-label">按父任务（史诗 · 含全部后代）</div>
+    <button class="opt" data-act="scope" data-kind="epic" data-value="all" data-selected="${state.epic === 'all' && state.view === 'epic'}">
+      <span class="check">${state.epic === 'all' && state.view === 'epic' ? '✓' : ''}</span>全部父任务</button>
+    ${EPICS.map(e => `<button class="opt" data-act="scope" data-kind="epic" data-value="${e.id}｜${e.name}" data-selected="${state.epic.startsWith(e.id) && state.view === 'epic'}">
+      <span class="check">${state.epic.startsWith(e.id) && state.view === 'epic' ? '✓' : ''}</span>${e.id} ${e.name.split('｜')[1]}<span class="k">${e.n} 项</span></button>`).join('')}
+  </div>`;
+
+const sortPanel = () => `
+  ${['默认排序', '按紧急度', '按更新时间', '按标题'].map(s => `
+    <button class="opt" data-act="sort" data-value="${s}" data-selected="${state.sort === s}">
+      <span class="check">${state.sort === s ? '✓' : ''}</span>${s}</button>`).join('')}`;
+
+const filterPanel = () => `
+  <div class="pop-group">
+    <div class="pop-label">紧急度</div>
+    ${['urgent', 'normal', 'relaxed'].map(u => `
+      <button class="opt" data-act="urg" data-value="${u}">
+        <span class="check">${state.urgencies.includes(u) ? '✓' : ''}</span>
+        <span class="dot" style="background:${u === 'urgent' ? '#e5484d' : u === 'normal' ? '#8b5cf6' : '#2f6fdd'}"></span>${URG_LABEL[u]}</button>`).join('')}
+  </div>
+  <div class="pop-group">
+    <div class="pop-label">来源</div>
+    <button class="opt" data-act="ext">
+      <span class="check">${state.externalOnly ? '✓' : ''}</span>🐙 只看 GitHub Issue</button>
+  </div>
+  <div class="pop-foot"><button class="btn" data-act="clear-all">清除全部</button></div>`;
+
+const moreMenu = () => `
+  <div class="pop-group">
+    <button class="opt" data-act="noop">👥 员工目录</button>
+    <button class="opt" data-act="noop">⚙ 看板设置</button>
+    <button class="opt" data-act="noop">🩺 诊断</button>
+  </div>
+  <div class="pop-group">
+    <button class="opt" data-act="noop">⬆ 导入台账</button>
+    <button class="opt" data-act="noop">⬇ 导出</button>
+  </div>
+  <div class="pop-group"><div class="pop-label">版本 0.9.12 · 上游 0.1.7-rc.2</div></div>`;
+
+/* ---------------------------------------------------------------- 现状 */
+function renderBefore() {
+  return `<div class="board">
+    <div class="tb" style="margin-bottom:10px">
+      <div class="tb-title"><b>Agent 任务看板</b><span class="count">${state.total} 任务 · rev ${state.rev}</span></div>
+      <button class="btn btn-primary">＋ 新建任务 <span class="caret">▾</span></button>
+      <div class="spacer"></div>
+      <div class="field"><span class="ico">🔍</span><input placeholder="搜索标题 / ID…" /></div>
+      <button class="btn">全部项目 <span class="caret">▾</span></button>
+      <button class="btn">全部父任务 <span class="caret">▾</span></button>
+      <button class="btn">默认排序 <span class="caret">▾</span></button>
+      <button class="btn">更多筛选</button>
+    </div>
+    <div class="tb">
+      <button class="btn">🙋 待我处理 (${state.needsCount})</button>
+      <button class="btn">其它任务</button>
+      <button class="btn">👥 员工</button>
+      <button class="btn">⚙ 设置</button>
+      <button class="btn">🩺 诊断</button>
+      <button class="btn">⬆ 导入</button>
+      <button class="btn">⬇ 导出 <span class="caret">▾</span></button>
+      <span class="hint">V0.9.11</span>
+    </div>
+  </div>
+  ${columns()}`;
+}
+
+/* ---------------------------------------------------------------- 方案 A */
+function renderA() {
+  const n = activeCount();
+  return `<div class="board">
+    <div class="tb">
+      <div class="tb-title"><b>Agent 任务看板</b><span class="count">${state.total}</span><span class="rev" title="台账 revision：便于排查与对账">rev ${state.rev}</span></div>
+      <div class="seg" style="margin-left:6px">
+        <button data-act="viewmode" data-value="board" data-on="${state.viewMode === 'board'}">看板</button>
+        <button data-act="viewmode" data-value="needs" data-on="${state.viewMode === 'needs'}">待我处理 (${state.needsCount})</button>
+        <button data-act="viewmode" data-value="other" data-on="${state.viewMode === 'other'}">其它任务</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="field"><span class="ico">🔍</span><input placeholder="搜索标题 / ID…" /></div>
+      ${pop('scope', `<button class="btn" data-on="${state.project !== 'all' || state.epic !== 'all'}">范围：${scopeLabel()} <span class="caret">▾</span></button>`, scopePanel())}
+      ${pop('filter', `<button class="btn" data-on="${n > 0}">🧰 筛选${n > 0 ? ` <span class="badge-n">${n}</span>` : ''}</button>`, filterPanel())}
+      ${pop('more', `<button class="btn btn-icon" title="更多">⋯</button>`, moreMenu())}
+      <button class="btn btn-primary">＋ 新建任务 <span class="caret">▾</span></button>
+    </div>
+    ${chips().length ? `<div class="chips">
+      ${chips().map(c => `<span class="chip">${c.k} <b>${c.v}</b><button class="x" data-act="chip" data-key="${c.k}">×</button></span>`).join('')}
+      <button class="chip-clear" data-act="clear-all">清除全部</button>
+    </div>` : ''}
+  </div>
+  ${columns()}`;
+}
+
+/* ---------------------------------------------------------------- 方案 B */
+function renderB() {
+  const n = activeCount();
+  return `<div class="board">
+    <div class="tb" style="margin-bottom:10px">
+      <div class="tb-title"><b>Agent 任务看板</b><span class="count">${state.total} 任务</span><span class="rev" title="台账 revision">rev ${state.rev}</span></div>
+      <div class="spacer"></div>
+      <div class="field"><span class="ico">🔍</span><input placeholder="搜索标题 / ID…" /></div>
+      <button class="btn btn-primary">＋ 新建任务 <span class="caret">▾</span></button>
+    </div>
+    <div class="tb">
+      <div class="seg">
+        <button data-act="viewmode" data-value="board" data-on="${state.viewMode === 'board'}">看板</button>
+        <button data-act="viewmode" data-value="needs" data-on="${state.viewMode === 'needs'}">待我处理 (${state.needsCount})</button>
+        <button data-act="viewmode" data-value="other" data-on="${state.viewMode === 'other'}">其它任务</button>
+      </div>
+      <span class="hint">｜</span>
+      ${pop('scope', `<button class="btn" data-on="${state.project !== 'all'}">项目：${state.project === 'all' ? '全部' : state.project} <span class="caret">▾</span></button>`, scopePanel())}
+      ${pop('filter', `<button class="btn" data-on="${n > 0}">🧰 筛选${n > 0 ? ` <span class="badge-n">${n}</span>` : ''}</button>`, filterPanel())}
+      ${pop('sort', `<button class="btn">${state.sort} <span class="caret">▾</span></button>`, sortPanel())}
+      <div class="spacer"></div>
+      ${pop('more', `<button class="btn">🛠 工具 <span class="caret">▾</span></button>`, moreMenu())}
+    </div>
+    ${chips().length ? `<div class="chips">
+      ${chips().map(c => `<span class="chip">${c.k} <b>${c.v}</b><button class="x" data-act="chip" data-key="${c.k}">×</button></span>`).join('')}
+      <button class="chip-clear" data-act="clear-all">清除全部</button>
+    </div>` : ''}
+  </div>
+  ${columns()}`;
+}
+
+/* ---------------------------------------------------------------- 方案 C */
+function renderC() {
+  const n = activeCount();
+  return `<div class="with-sidebar">
+    <aside class="side">
+      <div class="sec">
+        <h5>视图</h5>
+        <button class="opt" data-act="viewmode" data-value="board" data-selected="${state.viewMode === 'board'}"><span class="check">${state.viewMode === 'board' ? '✓' : ''}</span>看板</button>
+        <button class="opt" data-act="viewmode" data-value="needs" data-selected="${state.viewMode === 'needs'}"><span class="check">${state.viewMode === 'needs' ? '✓' : ''}</span>待我处理<span class="k">${state.needsCount}</span></button>
+        <button class="opt" data-act="viewmode" data-value="other" data-selected="${state.viewMode === 'other'}"><span class="check">${state.viewMode === 'other' ? '✓' : ''}</span>其它任务</button>
+      </div>
+      <div class="sec">
+        <h5>项目</h5>
+        <button class="opt" data-act="scope" data-kind="project" data-value="all" data-selected="${state.project === 'all'}"><span class="check">${state.project === 'all' ? '✓' : ''}</span>全部</button>
+        <button class="opt" data-act="scope" data-kind="project" data-value="hdefense" data-selected="${state.project === 'hdefense'}"><span class="check">${state.project === 'hdefense' ? '✓' : ''}</span>hdefense<span class="k">26</span></button>
+        <button class="opt" data-act="scope" data-kind="project" data-value="cloudflare" data-selected="${state.project === 'cloudflare'}"><span class="check">${state.project === 'cloudflare' ? '✓' : ''}</span>cloudflare<span class="k">5</span></button>
+      </div>
+      <div class="sec">
+        <h5>父任务（含全部后代）</h5>
+        <button class="opt" data-act="scope" data-kind="epic" data-value="all" data-selected="${state.epic === 'all'}"><span class="check">${state.epic === 'all' ? '✓' : ''}</span>全部</button>
+        ${EPICS.map(e => `<button class="opt" data-act="scope" data-kind="epic" data-value="${e.id}｜${e.name}" data-selected="${state.epic.startsWith(e.id)}"><span class="check">${state.epic.startsWith(e.id) ? '✓' : ''}</span>${e.id} ${e.name.split('｜')[1]}<span class="k">${e.n}</span></button>`).join('')}
+      </div>
+      <div class="sec">
+        <h5>紧急度</h5>
+        ${['urgent', 'normal', 'relaxed'].map(u => `<button class="opt" data-act="urg" data-value="${u}"><span class="check">${state.urgencies.includes(u) ? '✓' : ''}</span><span class="dot" style="background:${u === 'urgent' ? '#e5484d' : u === 'normal' ? '#8b5cf6' : '#2f6fdd'}"></span>${URG_LABEL[u]}</button>`).join('')}
+      </div>
+      <div class="sec">
+        <button class="opt" data-act="ext"><span class="check">${state.externalOnly ? '✓' : ''}</span>🐙 只看 GitHub Issue</button>
+        <button class="opt" data-act="clear-all"><span class="check"></span>清除全部筛选</button>
+      </div>
+    </aside>
+    <div>
+      <div class="board">
+        <div class="tb">
+          <div class="tb-title"><b>Agent 任务看板</b><span class="count">${state.total}</span><span class="rev">rev ${state.rev}</span></div>
+          <div class="spacer"></div>
+          <div class="field"><span class="ico">🔍</span><input placeholder="搜索…" style="width:150px" /></div>
+          ${pop('sort', `<button class="btn">${state.sort} <span class="caret">▾</span></button>`, sortPanel())}
+          <button class="btn btn-primary">＋ 新建任务 <span class="caret">▾</span></button>
+        </div>
+      </div>
+      ${columns()}
+    </div>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------- 渲染 */
+const NOTE = {
+  before: '<b>现状</b>：两行 14 个控件，创建/筛选/管理同权重；「待我处理、其它任务」是视图切换却混在筛选里；筛选生效后看不出筛了什么。',
+  a: '<b>方案 A（推荐）</b>：一行完成。标题 + 视图分段 + 搜索 + <b>范围</b>（项目与父任务合并为一个下拉）+ 筛选徽标 + ⋯ 管理菜单 + 新建。筛选生效时第二行才出现可移除 chips。',
+  b: '<b>方案 B</b>：两行重排。第一行标题/搜索/新建，第二行视图分段 + 筛选 + 工具菜单；所有筛选仍可见，认知负担比现状低。',
+  c: '<b>方案 C</b>：筛选全部进左侧栏，顶部只留标题/搜索/排序/新建；适合筛选维度还要继续增加的情况，但占用横向宽度。',
+};
+const NOTES = {
+  a: [
+    '<b>范围合并</b>：项目与父任务合成一个下拉，分「按项目 / 按父任务」两组；选中后按钮显示当前值，少一个控件宽度。',
+    '<b>视图分段</b>：看板 / 待我处理 / 其它任务 用一个分段控件表达，和筛选彻底分开。',
+    '<b>筛选徽标</b>：紧急度、来源收进「🧰 筛选」，激活时按钮高亮 + 数字徽标。',
+    '<b>chips 行</b>：任何筛选生效才出现，可单个移除或「清除全部」——这是现状最缺的可回退性。',
+    '<b>⋯ 管理菜单</b>：员工/设置/诊断/导入/导出/版本收进菜单，主栏只留高频动作。',
+  ],
+  b: [
+    '两行各自有明确职责：第一行「我在看什么 + 新建」，第二行「怎么看 + 工具」。',
+    '筛选仍直接可见（项目/筛选/排序），不需要点开才知道有没有生效。',
+    '工具菜单把 5 个管理按钮收成 1 个，减少第二行长度。',
+  ],
+  c: [
+    '左侧栏常驻筛选维度，新增维度不会挤占看板宽度。',
+    '顶部只保留标题/搜索/排序/新建，页面主轴更干净。',
+    '代价：窄屏下侧栏需要折叠成抽屉。',
+  ],
+};
+
+function render() {
+  const slot = document.getElementById('slot');
+  slot.innerHTML = state.view === 'before' ? renderBefore()
+    : state.view === 'a' ? renderA()
+    : state.view === 'b' ? renderB()
+    : renderC();
+  document.getElementById('stageNote').innerHTML = NOTE[state.view] ?? '';
+  const notes = document.getElementById('notes');
+  const list = NOTES[state.view];
+  notes.innerHTML = list ? `<ol>${list.map(t => `<li>${t}</li>`).join('')}</ol>` : '';
+  document.querySelectorAll('.tab[data-view]').forEach(tab => {
+    tab.dataset.on = String(tab.dataset.view === state.view || (tab.dataset.view === 'notes' && document.body.dataset.notes === 'true'));
+  });
+}
+
+/* ---------------------------------------------------------------- 事件 */
+document.addEventListener('click', event => {
+  const tab = event.target.closest('.tab[data-view]');
+  if (tab) {
+    if (tab.dataset.view === 'notes') {
+      document.body.dataset.notes = document.body.dataset.notes === 'true' ? 'false' : 'true';
+      render();
+      return;
+    }
+    state.view = tab.dataset.view;
+    state.open = null;
+    render();
+    return;
+  }
+
+  const toggle = event.target.closest('[data-toggle]');
+  if (toggle) {
+    const id = toggle.dataset.toggle;
+    state.open = state.open === id ? null : id;
+    render();
+    return;
+  }
+
+  const act = event.target.closest('[data-act]');
+  if (!act) {
+    // 点空白关闭下拉
+    if (state.open !== null && !event.target.closest('.pop-panel')) { state.open = null; render(); }
+    return;
+  }
+
+  switch (act.dataset.act) {
+    case 'scope':
+      if (act.dataset.kind === 'project') { state.view = 'project'; state.project = act.dataset.value; }
+      else { state.view = 'epic'; state.epic = act.dataset.value; }
+      state.open = null; break;
+    case 'sort': state.sort = act.dataset.value; state.open = null; break;
+    case 'urg': {
+      const u = act.dataset.value;
+      state.urgencies = state.urgencies.includes(u) ? state.urgencies.filter(x => x !== u) : [...state.urgencies, u];
+      break;
+    }
+    case 'ext': state.externalOnly = !state.externalOnly; break;
+    case 'viewmode': state.viewMode = act.dataset.value; break;
+    case 'clear-all': state.urgencies = []; state.externalOnly = false; state.project = 'all'; state.epic = 'all'; break;
+    case 'chip': {
+      const key = act.dataset.key;
+      if (key === '项目') state.project = 'all';
+      else if (key === '父任务') state.epic = 'all';
+      else if (key === '来源') state.externalOnly = false;
+      else if (key === '紧急度') state.urgencies = [];
+      break;
+    }
+  }
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
