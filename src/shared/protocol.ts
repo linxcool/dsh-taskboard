@@ -389,6 +389,13 @@ export type BoardSettings = {
    */
   createExternal?: boolean
   /**
+   * A repository holding CROSS-PROJECT conventions (Option C): the framing line
+   * points sessions at its AGENTS.md / docs/cross-repo-contracts.md as
+   * READ-ONLY reference. Sessions still run in their own project because the
+   * file sandbox boundary is the workspace root.
+   */
+  contextRepoPath?: string
+  /**
    * Allow an agent session to CLAIM a task of a project it reaches only through
    * a linked (multi-root) workspace root instead of its own workspace root
    * (default: false — the primary-root-only rule).
@@ -451,6 +458,13 @@ export function asBoardSettings(raw: unknown): BoardSettings {
       throw new Error('createExternal must be a boolean')
     }
     out.createExternal = e.createExternal
+  }
+  if (e.contextRepoPath !== undefined) {
+    if (typeof e.contextRepoPath !== 'string') {
+      throw new Error('contextRepoPath must be a string')
+    }
+    const path = e.contextRepoPath.trim()
+    if (path.length > 0) out.contextRepoPath = path
   }
   if (e.allowClaimFromLinkedRoots !== undefined) {
     if (typeof e.allowClaimFromLinkedRoots !== 'boolean') {

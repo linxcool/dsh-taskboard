@@ -1389,6 +1389,7 @@ export class ExecutionService {
       + `若无法完成：留评论说明原因，将任务移回就绪 todo。`
     text += this.checklistFraming(task)
     text += this.isolationFraming(prepared, degradeNote)
+    text += this.contextFraming()
     return text
   }
 
@@ -1409,7 +1410,22 @@ export class ExecutionService {
       + `若某条留言无法处理：留评论说明原因，任务保持待验收，交回用户决定。`
     text += this.checklistFraming(task)
     text += this.isolationFraming(prepared, degradeNote)
+    text += this.contextFraming()
     return text
+  }
+
+  /**
+   * Cross-project norms repo (Option C): the board setting names a repository
+   * holding shared conventions (e.g. aidot's AGENTS.md and
+   * docs/cross-repo-contracts.md). Sessions keep running in THEIR OWN project —
+   * the file sandbox boundary is the workspace root — so this is a READ-ONLY
+   * pointer, and cross-repo changes are split into sub-issue cards instead.
+   */
+  private contextFraming(): string {
+    const raw = (this.deps.store.snapshot().settings?.contextRepoPath ?? '').trim()
+    if (raw.length === 0) return ''
+    const base = raw.replace(/\\/g, '/').replace(/\/+$/, '')
+    return `\n跨项目规范（只读参考，不属于本任务，不要修改）：${base}/AGENTS.md、${base}/docs/cross-repo-contracts.md。跨仓库的改动请拆成子任务卡，在各自仓库执行。`
   }
 
   /** The shared DoD section of a framing line (extracted for the comment wake variant, issue #51). */

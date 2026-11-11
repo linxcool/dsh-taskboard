@@ -272,6 +272,8 @@ export type UpdateSettingsBody = {
   allowClaimFromLinkedRoots?: boolean
   /** Create a tracker issue for every card created on the board (P6). */
   createExternal?: boolean
+  /** Repository holding cross-project conventions (read-only framing pointer). */
+  contextRepoPath?: string
   /** Default permission preset for NEW tasks ('workspace-write' | 'read-only' | 'danger-full-access'). */
   defaultPermission?: string
   /** Default model and optional reasoning effort for NEW tasks; omitted = deployment default. */

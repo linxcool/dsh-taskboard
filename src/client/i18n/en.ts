@@ -604,6 +604,8 @@ export const en: TaskboardDict = {
   'set.iso.branchPrefix': 'Branch prefix',
   'set.iso.branchExample': 'Example: {example}',
   'set.iso.current': 'Currently saved default: {current}. Affects only tasks created hereafter; existing tasks keep their creation-time choice, and non-git projects still degrade to the project directory at run time.',
+  'set.contextRepo.heading': 'Cross-project norms repo (read-only)',
+  'set.contextRepo.hint': 'A repository holding shared conventions and templates (e.g. aidot). Sessions still run inside their own project with the same write boundary; the opening only points the agent at its AGENTS.md and docs/cross-repo-contracts.md. Split cross-repo changes into sub-issue cards.',
   'set.createExternal.heading': 'Create a GitHub issue with new cards',
   'set.createExternal.hint': 'When on, a task created on the board also opens a GitHub issue, adds it to the Project and sets its Status; the repository comes from the connection mapping of the task\'s project. Failures are reported on the card and never block creation.',
   'set.createExternal.off.name': 'Board only',

@@ -204,6 +204,35 @@ describe('ExecutionService', () => {
     liveSvc.dispose()
   })
 
+  it('points the framing at the cross-project norms repo when configured', async () => {
+    const store = await storeWith(task())
+    await store.mutate('settings-updated', ledger => {
+      ledger.settings = { ...ledger.settings, contextRepoPath: 'D:\\Projects\\github\\aidot\\' }
+      return []
+    })
+    const agents = fakeAgents()
+    const svc = new ExecutionService({ store, agents, workspaces, events: fakeEvents(), now: () => 1_000 })
+    const result = await svc.run('t-run', 'manual')
+    expect(result.ok).toBe(true)
+    const inject = agents.injects[0] as { content: Array<{ text: string }> }
+    const text = inject.content[0]!.text
+    // Paths are normalized to forward slashes: the framing is read by an agent,\n    // and a backslash path is escape-prone in the text it quotes back.\n    expect(text).toContain('D:/Projects/github/aidot/AGENTS.md')
+    expect(text).toContain('cross-repo-contracts.md')
+    // Read-only context: the norms repo must never look like a write target.
+    expect(text).toContain('不要修改')
+    svc.dispose()
+  })
+
+  it('adds no norms line when the setting is empty', async () => {
+    const store = await storeWith(task())
+    const agents = fakeAgents()
+    const svc = new ExecutionService({ store, agents, workspaces, events: fakeEvents(), now: () => 1_000 })
+    await svc.run('t-run', 'manual')
+    const inject = agents.injects[0] as { content: Array<{ text: string }> }
+    expect(inject.content[0]!.text).not.toContain('cross-repo-contracts.md')
+    svc.dispose()
+  })
+
   it('runs a task in a fresh in-project session with the pinned model', async () => {
     const store = await storeWith(task({ model: { provider: 'deepseek', model: 'reasoner' } }))
     const agents = fakeAgents()

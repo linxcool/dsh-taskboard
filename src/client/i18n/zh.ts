@@ -606,6 +606,8 @@ export const zh = {
   'set.iso.branchPrefix': '分支前缀',
   'set.iso.branchExample': '示例：{example}',
   'set.iso.current': '当前保存的默认：{current}。仅影响之后新建的任务；已有任务保持创建时的选择，非 git 项目运行时仍自动降级原目录。',
+  'set.contextRepo.heading': '跨项目规范仓库（只读参考）',
+  'set.contextRepo.hint': '填写一个存放跨项目约定与模板的仓库路径（如 aidot）。执行会话仍在本项目目录内运行、写入边界不变；开场只告诉 agent 去读它的 AGENTS.md 与 docs/cross-repo-contracts.md。跨仓库改动请拆子任务卡。',
   'set.createExternal.heading': '建卡时同步创建 GitHub Issue',
   'set.createExternal.hint': '打开后，在看板新建的任务会同时在 GitHub 建一个 issue，加入 Project 并按卡片状态设置 Status；仓库由任务所属项目的连接映射决定。失败只在卡片上留言，不影响建卡。',
   'set.createExternal.off.name': '仅本地',

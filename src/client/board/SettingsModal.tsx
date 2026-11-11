@@ -78,6 +78,9 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
   const [draftPerm, setDraftPerm] = useState<PermissionMode>(currentPerm)
   const [draftMulti, setDraftMulti] = useState<boolean>(currentMulti)
   const [draftCreateExternal, setDraftCreateExternal] = useState<boolean>(currentCreateExternal)
+  // Option C: repo holding CROSS-PROJECT conventions (read-only framing pointer).
+  const currentContextRepo = state.ledger.settings?.contextRepoPath ?? ''
+  const [draftContextRepo, setDraftContextRepo] = useState(currentContextRepo)
   const [draftMaxConcurrent, setDraftMaxConcurrent] = useState(String(currentMaxConcurrent))
   const [draftMissedAfterMinutes, setDraftMissedAfterMinutes] = useState(String(currentMissedAfterMinutes))
   const [draftQueueMaxAgeMinutes, setDraftQueueMaxAgeMinutes] = useState(String(currentQueueMaxAgeMinutes))
@@ -100,6 +103,7 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
     || draftDefaultWorkspace !== currentDefaultWorkspace
     || draftIso !== currentIso || draftSync !== currentSync || draftPerm !== currentPerm || draftMulti !== currentMulti
     || draftCreateExternal !== currentCreateExternal
+    || draftContextRepo.trim() !== currentContextRepo
     || draftBranchMode !== currentBranchMode || draftBranchPrefix !== currentBranchPrefix
     || draftMaxConcurrent !== String(currentMaxConcurrent) || draftMissedAfterMinutes !== String(currentMissedAfterMinutes)
     || draftQueueMaxAgeMinutes !== String(currentQueueMaxAgeMinutes) || draftDispatchIntervalMs !== String(currentDispatchIntervalMs)
@@ -129,6 +133,7 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
       defaultPermission: draftPerm,
       allowClaimFromLinkedRoots: draftMulti,
       createExternal: draftCreateExternal,
+      ...(draftContextRepo.trim().length > 0 ? { contextRepoPath: draftContextRepo.trim() } : {}),
       ...(parsedModel !== undefined ? { defaultModel: { ...parsedModel, ...(draftEffort !== '' ? { reasoningEffort: draftEffort } : {}) } } : {}),
       ...(draftPreset !== '' ? { defaultPresetId: draftPreset } : {}),
       ...(draftDefaultWorkspace !== '' ? { defaultWorkspaceId: draftDefaultWorkspace } : {}),
@@ -299,6 +304,19 @@ export function SettingsModal({ controller }: { controller: BoardController }) {
                 <span className="dsh-atb-mode-hint">{t('set.createExternal.on.hint')}</span>
               </button>
             </div>
+          </section>
+
+          <section className="dsh-atb-diag-sec">
+            <h4>{t('set.contextRepo.heading')}</h4>
+            <p className="dsh-atb-isolation-note">{t('set.contextRepo.hint')}</p>
+            <input
+              className="dsh-atb-input"
+              data-kind="context-repo"
+              value={draftContextRepo}
+              placeholder="D:\\Projects\\github\\aidot"
+              spellCheck={false}
+              onChange={event => setDraftContextRepo(event.target.value)}
+            />
           </section>
 
           <section className="dsh-atb-diag-sec">

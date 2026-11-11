@@ -62,6 +62,14 @@
 - 门禁：存在未关闭（非 done/canceled/archived）评审卡时，被评审任务**不能**移到 done；详情页完成按钮置灰，路由侧硬拒。
 - 代理（agent）本来就不能 done；门禁对用户与 API 同时生效。
 
+### P7 · 跨仓库协作：规范仓库只读引用
+
+- 看板设置「跨项目规范仓库（只读参考）」填一个存放跨项目约定/模板的仓库路径（本机是 `D:/Projects/github/aidot`）。
+- 开场 framing 只**多一行指针**：让 agent 去读该仓库的 `AGENTS.md` 与 `docs/cross-repo-contracts.md`；执行目录与写边界仍是任务自己的项目（DSH 的 workspace-write 以会话 cwd 为界，不因为多一行而放宽）。
+- 跨仓库的改动走**子任务卡**：父卡按阶段/里程碑、子卡各自落在对应仓库执行，父任务筛选可直接查看整棵树（P1 v2）。
+- 为什么不让会话直接在规范仓库执行：aidot 只放规范与模板，没有各项目代码；在那里开会话既改不了代码（沙箱），worktree 隔离也没有意义。
+- 已知边界：多仓库工作区（含伞形根）受 `MAX_MIRROR_REPOS = 8` 限制，本机 `D:/Projects/github` 下 22 个仓库，不能直接当工作区。
+
 ### P6 · 建卡即建 Issue（出站）
 
 - 看板设置「建卡时同步创建 GitHub Issue」（默认**关**）。打开后，新建任务会同时在 GitHub 建 issue、加入 Project 并按卡片状态设置 Status。
