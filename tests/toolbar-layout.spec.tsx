@@ -93,6 +93,9 @@ describe('toolbar layout A', () => {
     for (const entry of menu.querySelectorAll('[data-action]')) {
       expect(entry.querySelector('.dsh-atb-opt-icon')?.textContent?.trim()).toBeTruthy()
       expect(entry.querySelector('.dsh-atb-opt-text')?.textContent?.trim()).toBeTruthy()
+      // Nothing here is selectable: a check column would just indent every icon
+      // away from the version line at the bottom.
+      expect(entry.querySelector('.dsh-atb-opt-check')).toBeNull()
     }
   })
 
@@ -105,6 +108,8 @@ describe('toolbar layout A', () => {
     for (const row of rows) {
       expect(row.querySelector('.dsh-atb-opt-icon')).not.toBeNull()
       expect(row.querySelector('.dsh-atb-opt-text')?.textContent?.trim()).toBeTruthy()
+      // Selectable rows keep the check column so a ✓ never shifts the label.
+      expect(row.querySelector('.dsh-atb-opt-check')).not.toBeNull()
     }
   })
 

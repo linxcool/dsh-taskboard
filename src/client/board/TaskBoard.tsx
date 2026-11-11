@@ -172,14 +172,15 @@ function splitLeadingEmoji(label: string): { icon: string; text: string } {
 /**
  * One popover row: [check][icon][label].
  *
- * `selected` draws the checkmark in its own column so a selected row does not
- * shift its label.
+ * `selectable` reserves the check column; menus where nothing is ever checked
+ * (the overflow actions) skip it, so their icons line up with the version line
+ * at the bottom instead of being indented by a permanently empty column.
  */
-function MenuOption({ label, selected, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; selected?: boolean }) {
+function MenuOption({ label, selected, selectable = false, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; selected?: boolean; selectable?: boolean }) {
   const { icon, text } = splitLeadingEmoji(label)
   return (
     <button type="button" className="dsh-atb-newmenu-opt" data-selected={selected === true} {...rest}>
-      <span className="dsh-atb-opt-check" aria-hidden>{selected === true ? '✓' : ''}</span>
+      {selectable && <span className="dsh-atb-opt-check" aria-hidden>{selected === true ? '✓' : ''}</span>}
       <span className="dsh-atb-opt-icon" aria-hidden>{icon}</span>
       <span className="dsh-atb-opt-text">{text}</span>
     </button>
@@ -440,6 +441,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                 <div className="dsh-atb-menu-label">{t('board.filter.scopeProject')}</div>
                 <MenuOption
                   label={`🏠 ${t('board.filter.allProjects')}`}
+                  selectable
                   selected={state.filters.workspaceId === undefined}
                   data-scope="project"
                   data-value=""
@@ -449,6 +451,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                   <MenuOption
                     key={ws.id}
                     label={`📁 ${ws.title || ws.path}`}
+                  selectable
                     selected={state.filters.workspaceId === ws.id}
                     data-scope="project"
                     data-value={ws.id}
@@ -460,6 +463,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                     <div className="dsh-atb-menu-label" title={t('board.filter.parentTitle')}>{t('board.filter.scopeEpic')}</div>
                     <MenuOption
                       label={`📋 ${t('board.filter.parentAll')}`}
+                  selectable
                       selected={state.parentFilter === undefined}
                       data-scope="epic"
                       data-value=""
@@ -469,6 +473,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                       <MenuOption
                         key={externalIssueRef(epic.repo, epic.number)}
                         label={`📋 #${epic.number} ${epic.title}`}
+                  selectable
                         selected={state.parentFilter === epic.number}
                         data-scope="epic"
                         data-value={String(epic.number)}
@@ -529,6 +534,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                   <MenuOption
                     key={key}
                     label={`🔀 ${t(`board.sort.${key === 'title' ? 'byTitle' : key}`)}`}
+                  selectable
                     selected={state.sortBy === key}
                     data-sort={key}
                     onClick={() => controller.setSortBy(key)}
