@@ -172,6 +172,9 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
     return () => clearInterval(timer)
   }, [])
   const [onlyNeedsHuman, setOnlyNeedsHuman] = useState(false)
+  // Urgency + GitHub-only filters live behind one "more" popover: four chips of
+  // permanent toolbar width for filters most sessions never touch.
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   // Column vocabulary: a configured GitHub connection carries its project's
   // Status option names; without one the shipped i18n copy is used. Fetched
   // once per mount — the connection is edited in settings, not per render.
@@ -199,6 +202,7 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
     return [...seen.values()].sort((a, b) => a.number - b.number)
   })()
   const parentMap = state.parentFilter === undefined ? undefined : parentsByIssue(state.ledger.tasks)
+  const activeFilterCount = state.filters.urgencies.length + (state.filters.externalOnly === true ? 1 : 0)
   const visibleLive = state.parentFilter === undefined || parentMap === undefined
     ? live
     : live.filter(task => isDescendantOf(task, state.parentFilter!, parentMap))
@@ -335,30 +339,52 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
           <option value="created">{t('board.sort.created')}</option>
           <option value="title">{t('board.sort.byTitle')}</option>
         </select>
-        {(['urgent', 'normal', 'relaxed'] as const).map(u => (
+        <div className="dsh-atb-newmenu">
           <button
-            key={u}
             type="button"
-            className="dsh-atb-chip"
-            data-urgency={u}
-            data-on={state.filters.urgencies.includes(u)}
-            onClick={() => controller.toggleUrgency(u)}
+            className="dsh-atb-btn"
+            data-kind="more-filter"
+            aria-expanded={moreFiltersOpen}
+            title={t('board.filter.moreTitle')}
+            onClick={() => setMoreFiltersOpen(open => !open)}
           >
-            <span className="dsh-atb-dot" data-urgency={u} />
-            {t(URGENCY_KEYS[u])}
+            {t('board.filter.more')}
+            {activeFilterCount > 0 ? ` ·${activeFilterCount}` : ''}
           </button>
-        ))}
-        <button
-          type="button"
-          className="dsh-atb-chip"
-          data-kind="external-filter"
-          data-on={state.filters.externalOnly === true}
-          aria-pressed={state.filters.externalOnly === true}
-          title={t('board.filter.externalTitle')}
-          onClick={() => controller.toggleExternalOnly()}
-        >
-          🐙 {t('board.filter.external')}
-        </button>
+          {moreFiltersOpen && (
+            <>
+              <div className="dsh-atb-newmenu-backdrop" onClick={() => setMoreFiltersOpen(false)} />
+              <div className="dsh-atb-newmenu-menu dsh-atb-more-menu" data-kind="more-menu">
+              <div className="dsh-atb-more-row">
+                {(['urgent', 'normal', 'relaxed'] as const).map(u => (
+                  <button
+                    key={u}
+                    type="button"
+                    className="dsh-atb-chip"
+                    data-urgency={u}
+                    data-on={state.filters.urgencies.includes(u)}
+                    onClick={() => controller.toggleUrgency(u)}
+                  >
+                    <span className="dsh-atb-dot" data-urgency={u} />
+                    {t(URGENCY_KEYS[u])}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="dsh-atb-chip"
+                data-kind="external-filter"
+                data-on={state.filters.externalOnly === true}
+                aria-pressed={state.filters.externalOnly === true}
+                title={t('board.filter.externalTitle')}
+                onClick={() => controller.toggleExternalOnly()}
+              >
+                🐙 {t('board.filter.external')}
+              </button>
+              </div>
+            </>
+          )}
+        </div>
         <button
           type="button"
           className="dsh-atb-chip"

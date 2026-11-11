@@ -148,6 +148,8 @@ export const en: TaskboardDict = {
   'board.search.placeholder': 'Search title / ID…',
   'board.filter.allProjects': 'All projects',
   'board.filter.parentAll': 'All epics',
+  'board.filter.more': 'More filters',
+  'board.filter.moreTitle': 'Urgency and source filters',
   'board.filter.parentTitle': 'Filter by epic: show all of its descendants',
   'board.sort.title': 'Sort within columns',
   'board.sort.default': 'Default order',

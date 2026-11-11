@@ -149,6 +149,8 @@ export const ru: TaskboardDict = {
   'board.search.placeholder': 'Поиск по названию / ID…',
   'board.filter.allProjects': 'Все проекты',
   'board.filter.parentAll': 'Все эпики',
+  'board.filter.more': 'Ещё фильтры',
+  'board.filter.moreTitle': 'Фильтры по срочности и источнику',
   'board.filter.parentTitle': 'Фильтр по эпику: показать все его подзадачи',
   'board.sort.title': 'Сортировка внутри колонок',
   'board.sort.default': 'Порядок по умолчанию',

@@ -647,6 +647,9 @@ span.dsh-atb-comment-delivered { cursor: default; }
 .dsh-atb-form-hint { margin: 6px 0 0; font-size: 11.5px; color: var(--dsw-alias-label-secondary, gray); }
 
 /* Card conversation slot + its inline panel (P3 v2). */
+/* Toolbar "more filters" popover: urgency + source filters off the bar. */
+.dsh-atb-more-menu { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-width: 190px; }
+.dsh-atb-more-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .dsh-atb-sessmenu { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
 .dsh-atb-sess-slot {
   align-self: flex-start; font: inherit; font-size: 11px; line-height: 1.5; cursor: pointer;

@@ -150,6 +150,8 @@ export const zh = {
   'board.search.placeholder': '搜索标题 / ID…',
   'board.filter.allProjects': '全部项目',
   'board.filter.parentAll': '全部父任务',
+  'board.filter.more': '更多筛选',
+  'board.filter.moreTitle': '紧急度与来源筛选',
   'board.filter.parentTitle': '按父任务（史诗）筛选：显示它的全部后代任务',
   'board.sort.title': '列内排序',
   'board.sort.default': '默认排序',
