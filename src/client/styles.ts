@@ -121,6 +121,10 @@ button[class*="panelRow"]:has(.dsh-atb-pglyph) { position: relative; }
 
 .dsh-atb-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 body[data-dsh-sidebar-collapsed] .dsh-atb-panel-root .dsh-atb-toolbar { padding-right: 62px; }
+/* Title row: its own line, sized like a conversation header (layout A v2). */
+.dsh-atb-header { display: flex; align-items: baseline; gap: 8px; }
+body[data-dsh-sidebar-collapsed] .dsh-atb-panel-root .dsh-atb-header { padding-right: 62px; }
+.dsh-atb-header .dsh-atb-title { font-size: 17px; letter-spacing: .2px; }
 .dsh-atb-title { font-size: 15px; font-weight: 600; margin: 0; }
 .dsh-atb-count { font-size: 12px; color: var(--dsw-text-secondary, gray); }
 .dsh-atb-ver {

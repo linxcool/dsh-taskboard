@@ -141,7 +141,7 @@ export const ru: TaskboardDict = {
   'outcome.cancelled': 'Отменено',
 
   // ── board toolbar & columns (TaskBoard) ───────────────────────────
-  'board.title': 'Доска задач агента',
+  'board.title': 'AGENT — доска задач',
   'board.count.tasks': '{n} задач · ред. {rev}',
   'board.action.newTask': '+ Новая задача ▼',
   'board.action.blankTask': 'Пустая задача',

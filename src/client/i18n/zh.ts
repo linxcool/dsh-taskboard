@@ -142,7 +142,7 @@ export const zh = {
   'outcome.cancelled': '已取消',
 
   // ── board toolbar & columns (TaskBoard) ───────────────────────────
-  'board.title': 'Agent 任务看板',
+  'board.title': 'AGENT任务看板',
   'board.count.tasks': '{n} 任务 · rev {rev}',
   'board.action.newTask': '+ 新建任务 ▼',
   'board.action.blankTask': '空白任务',

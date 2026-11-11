@@ -323,10 +323,13 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
 
   return (
     <div className="dsh-atb-board">
-      <div className="dsh-atb-toolbar">
+      {/* Title row, like a conversation header: one line to itself. */}
+      <div className="dsh-atb-header" data-kind="header">
         <h2 className="dsh-atb-title">{t('board.title')}</h2>
         <span className="dsh-atb-count">{visibleLive.length}</span>
         <span className="dsh-atb-rev" title={t('board.rev.title', { rev: state.ledger.revision })}>rev {state.ledger.revision}</span>
+      </div>
+      <div className="dsh-atb-toolbar">
         {/* Layout A: the three VIEWS are one segmented control, separate from filters. */}
         <div className="dsh-atb-seg" role="group" aria-label={t('board.view.title')}>
           <button

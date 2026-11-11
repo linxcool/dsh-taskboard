@@ -140,7 +140,7 @@ export const en: TaskboardDict = {
   'outcome.cancelled': 'Canceled',
 
   // ── board toolbar & columns (TaskBoard) ───────────────────────────
-  'board.title': 'Agent Task Board',
+  'board.title': 'AGENT Task Board',
   'board.count.tasks': '{n} tasks · rev {rev}',
   'board.action.newTask': '+ New Task ▼',
   'board.action.blankTask': 'Blank task',

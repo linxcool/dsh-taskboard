@@ -74,6 +74,20 @@ async function mount() {
 }
 
 describe('toolbar layout A', () => {
+  it('gives the title its own header row, like a conversation title', async () => {
+    const view = await mount()
+    const header = view.host.querySelector('[data-kind="header"]')!
+    expect(header).not.toBeNull()
+    expect(header.textContent).toContain('AGENT')
+    expect(header.textContent).toContain('rev 7')
+    // Controls live on the next row, not next to the title.
+    expect(header.querySelector('[data-kind="scope"]')).toBeNull()
+    expect(header.querySelector('[data-kind="more-actions"]')).toBeNull()
+    const toolbar = view.host.querySelector('.dsh-atb-toolbar')!
+    expect(toolbar.querySelector('[data-kind="scope"]')).not.toBeNull()
+    expect(toolbar.querySelector('.dsh-atb-title')).toBeNull()
+  })
+
   it('shows the version only inside the overflow menu', async () => {
     const view = await mount()
     expect(view.host.textContent).not.toMatch(/V0\.\d/)
