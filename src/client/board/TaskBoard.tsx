@@ -525,13 +525,13 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             <>
               <div className="dsh-atb-newmenu-backdrop" onClick={() => setActionsOpen(false)} />
               <div className="dsh-atb-newmenu-menu" data-kind="more-actions-menu">
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="employees" title={t('board.action.employeesTitle')} onClick={() => { setActionsOpen(false); controller.openEmployees() }}>👥 {t('board.action.employees')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="settings" title={t('board.action.settingsTitle')} onClick={() => { setActionsOpen(false); controller.openSettings() }}>⚙ {t('board.action.settings')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="diag" title={t('board.action.diagTitle')} onClick={() => { setActionsOpen(false); controller.openDiagnostics() }}>🩺 {t('board.action.diag')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="employees" title={t('board.action.employeesTitle')} onClick={() => { setActionsOpen(false); controller.openEmployees() }}>{t('board.action.employees')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="settings" title={t('board.action.settingsTitle')} onClick={() => { setActionsOpen(false); controller.openSettings() }}>{t('board.action.settings')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="diag" title={t('board.action.diagTitle')} onClick={() => { setActionsOpen(false); controller.openDiagnostics() }}>{t('board.action.diag')}</button>
                 <div className="dsh-atb-newmenu-sep" />
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="import" title={t('board.action.importTitle')} onClick={() => { setActionsOpen(false); controller.openImport() }}>⬆ {t('board.action.import')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-json" title={t('board.export.jsonTitle')} onClick={() => { setActionsOpen(false); void controller.exportJson() }}>⬇ {t('board.export.json')}</button>
-                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-csv" title={t('board.export.csvTitle')} onClick={() => { setActionsOpen(false); void controller.exportCsv() }}>⬇ {t('board.export.csv')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="import" title={t('board.action.importTitle')} onClick={() => { setActionsOpen(false); controller.openImport() }}>{t('board.action.import')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-json" title={t('board.export.jsonTitle')} onClick={() => { setActionsOpen(false); void controller.exportJson() }}>{t('board.export.json')}</button>
+                <button type="button" className="dsh-atb-newmenu-opt" data-action="export-csv" title={t('board.export.csvTitle')} onClick={() => { setActionsOpen(false); void controller.exportCsv() }}>{t('board.export.csv')}</button>
                 <div className="dsh-atb-newmenu-sep" />
                 <div className="dsh-atb-menu-label" data-kind="version">
                   <a className="dsh-atb-ver" href="https://github.com/cloader/dsh-taskboard" target="_blank" rel="noopener noreferrer">V{PLUGIN_VERSION}</a>

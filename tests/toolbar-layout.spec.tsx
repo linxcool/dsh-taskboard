@@ -84,6 +84,10 @@ describe('toolbar layout A', () => {
     for (const action of ['employees', 'settings', 'diag', 'import', 'export-json', 'export-csv']) {
       expect(menu.querySelector(`[data-action="${action}"]`)).not.toBeNull()
     }
+    // The labels already carry their icon: a second prefix rendered "👥 👥 员工".
+    for (const entry of menu.querySelectorAll('[data-action]')) {
+      expect(entry.textContent ?? '').not.toMatch(/(👥|⚙|🩺|⬆|⬇|🐙|🙋)\s*\1/)
+    }
   })
 
   it('drives the views from one segmented control', async () => {
