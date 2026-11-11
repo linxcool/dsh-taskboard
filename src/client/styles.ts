@@ -1084,6 +1084,20 @@ color: var(--dsw-alias-state-business-primary, #3e63dd);
   border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25));
   box-shadow: var(--dsw-shadow-lv3, 0 12px 32px rgba(0,0,0,.18));
 }
+/* Same panel, anchored to the right edge of its trigger (layout A popovers).
+   Without an explicit rule the menu rendered IN FLOW as a tall narrow strip. */
+.dsh-atb-newmenu-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 41;
+  min-width: 210px; max-width: min(360px, 86vw);
+  display: flex; flex-direction: column; gap: 1px; padding: 5px; border-radius: 10px;
+  background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, inherit);
+  border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25));
+  box-shadow: var(--dsw-shadow-lv3, 0 12px 32px rgba(0,0,0,.18));
+  max-height: min(70vh, 520px); overflow-y: auto;
+}
+.dsh-atb-newmenu-menu .dsh-atb-newmenu-opt { white-space: normal; }
+.dsh-atb-newmenu-menu .dsh-atb-chip { align-self: flex-start; }
+.dsh-atb-newmenu-menu .dsh-atb-menu-label { padding: 7px 10px 3px; }
 .dsh-atb-newmenu-opt {
   border: none; background: none; text-align: left; cursor: pointer; padding: 7px 10px;
   font-size: 12.5px; color: inherit; border-radius: 7px; white-space: nowrap;
